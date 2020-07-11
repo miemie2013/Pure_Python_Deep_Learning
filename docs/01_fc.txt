@@ -30,6 +30,8 @@ grad = [
 [dloss/dy00, dloss/dy01],
 [dloss/dy10, dloss/dy11]]   # (N, S)
 
+grad是最终loss对本层输出张量Y的梯度，形状和Y一样，是(N, S)。
+
 
 训练时前向传播有
 Y = XW+B

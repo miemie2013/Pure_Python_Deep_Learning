@@ -89,11 +89,3 @@ class FC(Layer):
         self.w = w
         return dX
 
-
-#  A Deep Learning Framework with Pure Python Implement
-
-
-#  Pure Python Deep Learning Framework with Pure Python Implement
-
-#  Pure_Python_Deep_Learning
-
