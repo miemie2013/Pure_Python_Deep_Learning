@@ -119,22 +119,24 @@ class Conv2D(Layer):
                 ori_x = j*stride   # 卷积核在pad_x中的横坐标，等差数列，公差是stride
                 ori_y = i*stride   # 卷积核在pad_x中的纵坐标，等差数列，公差是stride
                 part_x = pad_x[:, :, ori_y:ori_y+kH, ori_x:ori_x+kW]   # 截取卷积核所处的位置的像素 [N, in_C, kH, kW]
+
                 exp_part_x = np.expand_dims(part_x, 1)   # 增加1维，[N, 1,     in_C, kH, kW]。
-                tile_exp_part_x = np.tile(exp_part_x, (1, out_C, 1, 1, 1))  # [N, out_C, in_C, kH, kW]  固定前2维为特定下标，就是课件里的3维张量了X_p了！
+
                 # 获取loss对当前位置输出元素的偏导数dy。
                 dy = grad[:, :, i:i+1, j:j+1]  # [N, out_C, 1, 1]  固定前2维为特定下标，就是课件里的标量dloss/dy_nkij了！
                 dy = np.expand_dims(dy, 2)   # 增加1维，[N, out_C, 1, 1, 1]。
-                tile_dy = np.tile(dy, (1, 1, in_C, kH, kW))  # 重复，[N, out_C, in_C, kH, kW]。 让dy可以和X_p逐元素相乘。
+
                 # 中文记法：dy乘以当前卷积核覆盖的像素块，再累加，就是loss对W的偏导数了。过了面试的话不用谢我。
-                temp = tile_dy * tile_exp_part_x   # [N, out_C, in_C, kH, kW]
+                temp = dy * exp_part_x   # [N, out_C, in_C, kH, kW]
                 temp = np.sum(temp, axis=(0, ))  # [out_C, in_C, kH, kW]  多个样本共享了权重W，所以求和
-                dW += temp
+                dW += temp      # “多个样本”共享了权重W，所以求和。现在，你是不是觉得我很聪明？哈哈
 
                 # loss对输入x的偏导数
-                # exp_w = np.expand_dims(w, 0)      # 卷积核也增加1维，[1, out_C, in_C, kH, kW]。
-                sum_w = np.sum(w, axis=0, keepdims=True)      # 卷积核也增加1维，[1, in_C, kH, kW]。
-                sum_w = np.tile(sum_w, (N, 1, 1, 1))  # 重复
-                dpad_x[:, :, ori_y:ori_y+kH, ori_x:ori_x+kW] += sum_w   # [N, in_C, kH, kW]
+                exp_W = np.expand_dims(w, 0)         # [1, out_C, in_C, kH, kW]
+                temp = dy * exp_W                    # [N, out_C, in_C, kH, kW]
+                temp = np.sum(temp, axis=(1, ))      # [N, in_C, kH, kW]  全连接层中，是把偏移数量那一维求和掉，卷积层里也是一样，把偏移数量那一维求和掉。
+                dpad_x[:, :, ori_y:ori_y+kH, ori_x:ori_x+kW] += temp    # [N, in_C, H + padding*2, W + padding*2]
+
         # 更新可训练参数
         if b is not None:
             b += -1.0 * lr * dB

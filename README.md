@@ -45,6 +45,8 @@ Paddle版SOLO: https://github.com/miemie2013/Paddle-SOLO
 
 2020/07/11:实现了fc层
 
+2020/07/11:实现了卷积层
+
 ## 环境搭建
 
 与飞桨1.8.0版本校验，cpu或gpu版皆可。
