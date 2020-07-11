@@ -112,17 +112,17 @@ if __name__ == '__main__':
         # 1.fc层
         my_fc01_out = fc01.train_forward(batch_data)
         diff_fc01_out = np.sum((paddle_fc01_out - my_fc01_out)**2)
-        print('diff_fc01_out=%.6f' % diff_fc01_out)   # 若是0，则表示成功模拟出PaddlePaddle卷积层的输出结果
+        print('diff_fc01_out=%.6f' % diff_fc01_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
 
         # 2.fc层
         my_fc02_out = fc02.train_forward(my_fc01_out)
         diff_fc02_out = np.sum((paddle_fc02_out - my_fc02_out)**2)
-        print('diff_fc02_out=%.6f' % diff_fc02_out)   # 若是0，则表示成功模拟出PaddlePaddle卷积层的输出结果
+        print('diff_fc02_out=%.6f' % diff_fc02_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
 
         # 3.损失函数层
         my_mseloss_out = mse01.train_forward(my_fc02_out, y_true_arr)
         diff_mseloss_out = np.sum((paddle_mseloss_out - my_mseloss_out)**2)
-        print('diff_mseloss_out=%.6f' % diff_mseloss_out)   # 若是0，则表示成功模拟出PaddlePaddle bn层的输出结果
+        print('diff_mseloss_out=%.6f' % diff_mseloss_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
 
         print('\ntrain_backward:')
         # 纯python搭建的神经网络进行反向传播啦！求偏导数即可。反向传播会更新权重，我们期望和飞桨有相同的权重。
