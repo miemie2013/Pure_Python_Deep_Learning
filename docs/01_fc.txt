@@ -1,0 +1,147 @@
+
+
+设全连接层的输入X是一个2维张量，形状是(N, C)，N代表批大小，C代表属性数；
+全连接层的权重是W，形状是(C, S)；全连接层的偏移是B，形状是(S, )；
+全连接层的输出是Y，形状是(N, S)。那么有
+Y=XW+B
+XW代表矩阵乘法，结果是一个形状为(N, S)的张量，这个张量每一行都加上了B（即B会重复N次）就组成了Y
+
+取特殊值
+N=2
+C=2
+S=2
+，那么
+
+X = [
+[x00, x01],
+[x10, x11]]   # (N, C)
+
+W = [
+[w00, w01],
+[w10, w11]]   # (C, S)
+
+B = [b0, b1]   # (S, )
+
+Y = [
+[y00, y01],
+[y10, y11]]   # (N, S)
+
+grad = [
+[dloss/dy00, dloss/dy01],
+[dloss/dy10, dloss/dy11]]   # (N, S)
+
+
+训练时前向传播有
+Y = XW+B
+即
+y00 = x00*w00 + x01*w10 + b0
+y01 = x00*w01 + x01*w11 + b1
+
+y10 = x10*w00 + x11*w10 + b0
+y11 = x10*w01 + x11*w11 + b1
+
+所以
+dy00/db0 = 1
+dy00/dw00 = x00
+dy00/dw10 = x01
+dy00/dx00 = w00
+dy00/dx01 = w10
+dy01/db1 = 1
+dy01/dw01 = x00
+dy01/dw11 = x01
+dy01/dx00 = w01
+dy01/dx01 = w11
+
+dy10/db0 = 1
+dy10/dw00 = x10
+dy10/dw10 = x11
+dy10/dx10 = w00
+dy10/dx11 = w10
+dy11/db1 = 1
+dy11/dw01 = x10
+dy11/dw11 = x11
+dy11/dx10 = w01
+dy11/dx11 = w11
+
+
+所以
+(1)loss对B的梯度
+dloss/db0 = dloss/dy00 * dy00/db0 + dloss/dy01 * dy01/db0 + dloss/dy10 * dy10/db0 + dloss/dy11 * dy11/db0
+= dloss/dy00 * 1 + dloss/dy10 * 1
+= dloss/dy00 + dloss/dy10 = np.sum(grad, axis=0)[0]   # 这个和的第0项是loss对b0的偏导数
+同理
+dloss/db1 = np.sum(grad, axis=0)[1]   # 这个和的第1项是loss对b1的偏导数
+所以对于整体的B
+dloss/dB = np.sum(grad, axis=0)
+
+
+
+(2)loss对W的梯度
+dloss/dw00 = dloss/dy00 * dy00/dw00 + dloss/dy01 * dy01/dw00 + dloss/dy10 * dy10/dw00 + dloss/dy11 * dy11/dw00
+= dloss/dy00 * x00 + dloss/dy10 * x10 = np.sum(grad[:, 0:1]*X[:, 0:1])   # grad第0列（长度为N） 点积 X第0列（长度为N） 涉及到对不同样本求和
+同理
+dloss/dw01 = dloss/dy00 * dy00/dw01 + dloss/dy01 * dy01/dw01 + dloss/dy10 * dy10/dw01 + dloss/dy11 * dy11/dw01
+= dloss/dy01 * x00 + dloss/dy11 * x10 = np.sum(grad[:, 1:2]*X[:, 0:1])   # grad第1列（长度为N） 点积 X第0列（长度为N） 涉及到对不同样本求和
+
+dloss/dw10 = dloss/dy00 * dy00/dw10 + dloss/dy01 * dy01/dw10 + dloss/dy10 * dy10/dw10 + dloss/dy11 * dy11/dw10
+= dloss/dy00 * x01 + dloss/dy10 * x11 = np.sum(grad[:, 0:1]*X[:, 1:2])   # grad第0列（长度为N） 点积 X第1列（长度为N） 涉及到对不同样本求和
+
+dloss/dw11 = dloss/dy00 * dy00/dw11 + dloss/dy01 * dy01/dw11 + dloss/dy10 * dy10/dw11 + dloss/dy11 * dy11/dw11
+= dloss/dy01 * x01 + dloss/dy11 * x11 = np.sum(grad[:, 1:2]*X[:, 1:2])   # grad第1列（长度为N） 点积 X第1列（长度为N） 涉及到对不同样本求和
+
+所以对于整体的W
+dloss/dW = [
+[dloss/dw00, dloss/dw01],
+[dloss/dw10, dloss/dw11]]   # (C, S)
+= [
+[np.sum(grad[:, 0:1]*X[:, 0:1]), np.sum(grad[:, 1:2]*X[:, 0:1])],
+[np.sum(grad[:, 0:1]*X[:, 1:2]), np.sum(grad[:, 1:2]*X[:, 1:2])]]   # (C, S)
+
+等价于执行
+exp_grad = np.expand_dims(grad, 1)   # [N, 1, S]
+exp_X = np.expand_dims(X, 2)         # [N, C, 1]
+dW = exp_grad * exp_X                # [N, C, S]
+dW = np.sum(dW, axis=(0, ))          # [C, S]  多个样本共享了权重W，所以求和
+
+
+不管是dloss/dB还是dloss/dW都会涉及到对第0维（代表着批的那一维）求和，为什么呢？
+因为这一批样本，都共享了权重B和W，都是靠着B和W产生相应的输出，到网络的最后会计算损失。计算损失的过程中有一个求和操作
+，也就是把这一批所有样本各自的损失加起来，所以就导致了对B和W的偏导数里不同样本之间有加号
+（正是因为损失里不同样本之间有加号，所以B和W的偏导数里不同样本之间也有加号）
+
+
+(3)loss对X的梯度。因为前向传播时，每个样本共享了权重B和W，样本之间互不干扰，我们取第0个样本的梯度研究，即
+dloss/dx00 = dloss/dy00 * dy00/dx00 + dloss/dy01 * dy01/dx00 + dloss/dy10 * dy10/dx00 + dloss/dy11 * dy11/dx00
+= dloss/dy00 * w00 + dloss/dy01 * w01   # 只和loss对第0个样本的输出y00、y01的偏导数有关。和第1个样本无关。你(第1个样本)走你的阳光道，我(第0个样本)过我的独木桥。
+dloss/dx01 = dloss/dy00 * dy00/dx01 + dloss/dy01 * dy01/dx01 + dloss/dy10 * dy10/dx01 + dloss/dy11 * dy11/dx01
+= dloss/dy00 * w10 + dloss/dy01 * w11   # 只和loss对第0个样本的输出y00、y01的偏导数有关。和第1个样本无关。你(第1个样本)走你的阳光道，我(第0个样本)过我的独木桥。
+
+所以对于第0个样本
+dloss/dx0 = [dloss/dx00, dloss/dx01]     # (1, C)
+= [dloss/dy00 * w00 + dloss/dy01 * w01, dloss/dy00 * w10 + dloss/dy01 * w11]    # (1, C)
+
+等价于执行
+sample0_grad = grad[0:1, :]    #   (1, S)  第0个样本的梯度（loss对本层输出的梯度）
+dx0 = sample0_grad * W         #   (C, S)  第0个样本的梯度乘以权重
+dx0 = np.sum(dx0, axis=(1, ))  #   (C, ) 
+dx0 = np.expand_dims(dx0, 0)   #   (1, C) 
+
+
+这一批样本每个样本都是这样求梯度，所以直接归纳为（等价于执行）：
+exp_grad = np.expand_dims(grad, 1)   # [N, 1, S]
+exp_W = np.expand_dims(W, 0)         # [1, C, S]
+dX = exp_grad * exp_W                # [N, C, S]
+dX = np.sum(dX, axis=(2, ))          # [N, C]
+
+
+小结：
+N、C、S不取特殊值，直接推导的话也是这些结果。
+但是由于兼顾的变量太多，有点劝退读者，故此处选取特殊值。
+有兴趣的读者可以不取特殊值直接推导看看。
+
+
+
+
+
+
+
