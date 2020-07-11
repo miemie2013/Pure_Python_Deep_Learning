@@ -1,6 +1,6 @@
 [English](README_en.md) | 简体中文
 
-# Keras-YOLOv4
+# Pure_Python_Deep_Learning
 
 ## 概述
 纯Python实现的深度学习框架。带你深入理解神经网络底层计算细节。为了验证结果的正确性，本人将会拿它的结果与百度飞桨的结果进行校验。
