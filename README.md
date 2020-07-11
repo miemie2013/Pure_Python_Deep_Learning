@@ -49,6 +49,10 @@ Paddle版SOLO: https://github.com/miemie2013/Paddle-SOLO
 
 2020/07/12:实现了激活层
 
+## 优先级
+
+bn层，课件，Add，Concat，池化层（类似卷积层），Resnet50，上采样，YOLOv3，其它损失，...
+
 ## 环境搭建
 
 与飞桨1.8.0版本校验，cpu或gpu版皆可。
