@@ -79,7 +79,7 @@ class FC(Layer):
         # loss对输入x的偏导数，用来更新前面的层的权重
         exp_W = np.expand_dims(w, 0)         # [1, in_C, size]
         dX = exp_grad * exp_W                # [N, in_C, size]
-        dX = np.sum(dX, axis=(2, ))          # [N, in_C]
+        dX = np.sum(dX, axis=(2, ))          # [N, in_C]   把偏移数量那一维求和
 
         # 更新可训练参数
         if b is not None:

@@ -125,7 +125,7 @@ dloss/dx0 = [dloss/dx00, dloss/dx01]     # (1, C)
 等价于执行
 sample0_grad = grad[0:1, :]    #   (1, S)  第0个样本的梯度（loss对本层输出的梯度）
 dx0 = sample0_grad * W         #   (C, S)  第0个样本的梯度乘以权重
-dx0 = np.sum(dx0, axis=(1, ))  #   (C, ) 
+dx0 = np.sum(dx0, axis=(1, ))  #   (C, )   把偏移数量那一维求和
 dx0 = np.expand_dims(dx0, 0)   #   (1, C) 
 
 
@@ -133,7 +133,7 @@ dx0 = np.expand_dims(dx0, 0)   #   (1, C)
 exp_grad = np.expand_dims(grad, 1)   # [N, 1, S]
 exp_W = np.expand_dims(W, 0)         # [1, C, S]
 dX = exp_grad * exp_W                # [N, C, S]
-dX = np.sum(dX, axis=(2, ))          # [N, C]
+dX = np.sum(dX, axis=(2, ))          # [N, C]   把偏移数量那一维求和
 
 
 小结：
