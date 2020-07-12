@@ -225,20 +225,20 @@ if __name__ == '__main__':
         print('diff_bn01_variance=%.6f' % diff_bn01_variance)   # 若是0，则表示成功模拟出方差更新
 
         # ==================== test ====================
-        # test_data = np.random.normal(loc=0, scale=1, size=(2, 3, 28, 28)).astype(np.float32)
-        # paddle_test_bn01_out, paddle_test_bn02_out = exe.run(compiled_eval_prog, feed={"input_1": test_data, }, fetch_list=eval_fetch_list)
-        # # 自己网络的test
-        # print('\ntest_forward:')
-        # my_test_conv01_out = conv01.test_forward(test_data)
-        # my_test_bn01_out = bn01.test_forward(my_test_conv01_out)
-        # my_test_act01_out = act01.test_forward(my_test_bn01_out)
-        # my_test_conv02_out = conv02.test_forward(my_test_act01_out)
-        # my_test_bn02_out = bn02.test_forward(my_test_conv02_out)
-        # my_test_act02_out = act02.test_forward(my_test_bn02_out)
-        # diff_test_bn01_out = np.sum((paddle_test_bn01_out - my_test_bn01_out)**2)
-        # print('diff_test_bn01_out=%.6f' % diff_test_bn01_out)   # 若是0，则表示成功模拟出推理
-        # diff_test_bn02_out = np.sum((paddle_test_bn02_out - my_test_bn02_out)**2)
-        # print('diff_test_bn02_out=%.6f' % diff_test_bn02_out)   # 若是0，则表示成功模拟出推理
+        test_data = np.random.normal(loc=0, scale=1, size=(2, 3, 28, 28)).astype(np.float32)
+        paddle_test_bn01_out, paddle_test_bn02_out = exe.run(compiled_eval_prog, feed={"input_1": test_data, }, fetch_list=eval_fetch_list)
+        # 自己网络的test
+        print('\ntest_forward:')
+        my_test_conv01_out = conv01.test_forward(test_data)
+        my_test_bn01_out = bn01.test_forward(my_test_conv01_out)
+        my_test_act01_out = act01.test_forward(my_test_bn01_out)
+        my_test_conv02_out = conv02.test_forward(my_test_act01_out)
+        my_test_bn02_out = bn02.test_forward(my_test_conv02_out)
+        my_test_act02_out = act02.test_forward(my_test_bn02_out)
+        diff_test_bn01_out = np.sum((paddle_test_bn01_out - my_test_bn01_out)**2)
+        print('diff_test_bn01_out=%.6f' % diff_test_bn01_out)   # 若是0，则表示成功模拟出推理
+        diff_test_bn02_out = np.sum((paddle_test_bn02_out - my_test_bn02_out)**2)
+        print('diff_test_bn02_out=%.6f' % diff_test_bn02_out)   # 若是0，则表示成功模拟出推理
 
 
 

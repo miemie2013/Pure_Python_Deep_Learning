@@ -49,6 +49,8 @@ Paddle版SOLO: https://github.com/miemie2013/Paddle-SOLO
 
 2020/07/12:实现了激活层
 
+2020/07/13:实现了bn层。感谢博客https://zhuanlan.zhihu.com/p/26138673
+
 ## 优先级
 
 bn层，课件，Add，Concat，池化层（类似卷积层），Resnet50，上采样，YOLOv3，其它损失，...
