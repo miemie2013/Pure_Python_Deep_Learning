@@ -204,8 +204,8 @@ class BatchNorm(Layer):
 
         # 看飞桨的源码，看看标准差有没有涉及到epsilon？？？
         # loss对输入x的偏导数，用来更新前面的层的权重
-        exp_Scale = np.reshape(Scale, (1, -1, 1, 1))         # [1, C, 1, 1]
-        dnormX = grad * exp_Scale               # [N, C, H, W]
+        exp_Scale = np.reshape(Scale, (1, -1, 1, 1))   # [1, C, 1, 1]
+        dnormX = grad * exp_Scale                      # [N, C, H, W]
         dX = dnormX
 
         # 更新可训练参数
