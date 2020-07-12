@@ -105,8 +105,7 @@ exp_X = np.expand_dims(X, 2)         # [N, C, 1]
 dW = exp_grad * exp_X                # [N, C, S]
 dW = np.sum(dW, axis=(0, ))          # [C, S]  多个样本共享了权重W，所以求和
 
-
-不管是dloss/dB还是dloss/dW都会涉及到对第0维（代表着批的那一维）求和，为什么呢？
+思考1：不管是dloss/dB还是dloss/dW都会涉及到对第0维（代表着批的那一维）求和，为什么呢？
 因为这一批样本，都共享了权重B和W，都是靠着B和W产生相应的输出，到网络的最后会计算损失。计算损失的过程中有一个求和操作
 ，也就是把这一批所有样本各自的损失加起来，所以就导致了对B和W的偏导数里不同样本之间有加号
 （正是因为损失里不同样本之间有加号，所以B和W的偏导数里不同样本之间也有加号）
@@ -134,6 +133,25 @@ exp_grad = np.expand_dims(grad, 1)   # [N, 1, S]
 exp_W = np.expand_dims(W, 0)         # [1, C, S]
 dX = exp_grad * exp_W                # [N, C, S]
 dX = np.sum(dX, axis=(2, ))          # [N, C]   把偏移数量那一维求和
+
+思考2：为什么dloss/dX是对长度为S那一维求和？
+除了迎合dloss/dX的形状必须和X的形状一样这个要求之外，还是有原因的。
+有没有发现，在全连接层中，x0j（即第0个样本第j个属性）参与了所有y0k的计算（k=0, 1, 2, ..., S-1），
+即x0j参与了y0所有属性的计算。分别为：
+y00 = ... + x0j*wj0 + ... + b0
+y01 = ... + x0j*wj1 + ... + b1
+...
+Y[0, S-1] = ... + x0j*W[j, S-1] + ... + B[S-1]
+所以求求偏导看看，
+dloss/dx0j = dloss/dy00 * dy00/dx0j + dloss/dy01 * dy01/dx0j + ... + dloss/dY[0, S-1] * dY[0, S-1]/dx0j
+= dloss/dy00 * wj0 + dloss/dy01 * wj1 + ... + dloss/dY[0, S-1] * W[j, S-1]
+= grad第0行 点积 W第j行   # 它们的长度都是S
+推广的话，
+dloss/dxij = grad第i行 点积 W第j行   # 它们的长度都是S
+整体的话，
+也就是对长度为S那一维求和。
+（在思考2中已经推导出更为广泛的dloss/dxij了，N、C、S没有取特殊值）
+
 
 
 小结：

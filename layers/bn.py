@@ -54,26 +54,18 @@ class BatchNorm(Layer):
         # 求均值
         N, C, H, W = x.shape
         mean = np.mean(x, axis=(0, 2, 3))       # NHW维求均值，[C, ]。注意，这是当前批的均值。
-        exp_mean = np.expand_dims(mean, 0)      # [1, C]
-        exp_mean = np.expand_dims(exp_mean, 2)  # [1, C, 1]
-        exp_mean = np.expand_dims(exp_mean, 3)  # [1, C, 1, 1]
+        exp_mean = np.reshape(mean, (1, -1, 1, 1))        # [1, C, 1, 1]
         tile_exp_mean = np.tile(exp_mean, (N, 1, H, W))   # [N, C, H, W]，第0维重复N次，第2维重复H次，第3维重复W次，使得形状和x一样
         # 求方差
         var = (x - tile_exp_mean) ** 2          # 当前批的方差。
         var = np.mean(var, axis=(0, 2, 3))      # NHW维求均值，[C, ]。注意，这是当前批的方差。
-        exp_var = np.expand_dims(var, 0)        # [1, C]
-        exp_var = np.expand_dims(exp_var, 2)    # [1, C, 1]
-        exp_var = np.expand_dims(exp_var, 3)    # [1, C, 1, 1]
+        exp_var = np.reshape(var, (1, -1, 1, 1))          # [1, C, 1, 1]
         tile_exp_var = np.tile(exp_var, (N, 1, H, W))     # [N, C, H, W]，第0维重复N次，第2维重复H次，第3维重复W次，使得形状和x一样
 
         # gamma和beta同样扩展（重复）成x的形状
-        exp_Scale = np.expand_dims(Scale, 0)      # [1, C]
-        exp_Scale = np.expand_dims(exp_Scale, 2)  # [1, C, 1]
-        exp_Scale = np.expand_dims(exp_Scale, 3)  # [1, C, 1, 1]
+        exp_Scale = np.reshape(Scale, (1, -1, 1, 1))        # [1, C, 1, 1]
         tile_exp_Scale = np.tile(exp_Scale, (N, 1, H, W))   # [N, C, H, W]，第0维重复N次，第2维重复H次，第3维重复W次，使得形状和x一样
-        exp_Bias = np.expand_dims(Bias, 0)        # [1, C]
-        exp_Bias = np.expand_dims(exp_Bias, 2)    # [1, C, 1]
-        exp_Bias = np.expand_dims(exp_Bias, 3)    # [1, C, 1, 1]
+        exp_Bias = np.reshape(Bias, (1, -1, 1, 1))          # [1, C, 1, 1]
         tile_exp_Bias = np.tile(exp_Bias, (N, 1, H, W))     # [N, C, H, W]，第0维重复N次，第2维重复H次，第3维重复W次，使得形状和x一样
 
         # bn训练时前向传播的公式
