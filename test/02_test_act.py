@@ -118,20 +118,17 @@ if __name__ == '__main__':
 
         print('train_forward:')
         # python代码模拟训练过程，与paddle的输出校验。我们希望和飞桨有相同的输出。
-        # 1.fc层
         my_fc01_out = fc01.train_forward(batch_data)
         my_act01_out = act01.train_forward(my_fc01_out)
-        diff_act01_out = np.sum((paddle_act01_out - my_act01_out)**2)
-        print('diff_act01_out=%.6f' % diff_act01_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
-
-        # 3.fc层
         my_fc02_out = fc02.train_forward(my_act01_out)
         my_act02_out = act02.train_forward(my_fc02_out)
+        my_mseloss_out = mse01.train_forward(my_act02_out, y_true_arr)
+
+
+        diff_act01_out = np.sum((paddle_act01_out - my_act01_out)**2)
+        print('diff_act01_out=%.6f' % diff_act01_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
         diff_act02_out = np.sum((paddle_act02_out - my_act02_out)**2)
         print('diff_act02_out=%.6f' % diff_act02_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
-
-        # 3.损失函数层
-        my_mseloss_out = mse01.train_forward(my_act02_out, y_true_arr)
         diff_mseloss_out = np.sum((paddle_mseloss_out - my_mseloss_out)**2)
         print('diff_mseloss_out=%.6f' % diff_mseloss_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
 

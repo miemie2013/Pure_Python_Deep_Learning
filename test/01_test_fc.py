@@ -109,28 +109,22 @@ if __name__ == '__main__':
 
         print('train_forward:')
         # python代码模拟训练过程，与paddle的输出校验。我们希望和飞桨有相同的输出。
-        # 1.fc层
         my_fc01_out = fc01.train_forward(batch_data)
+        my_fc02_out = fc02.train_forward(my_fc01_out)
+        my_mseloss_out = mse01.train_forward(my_fc02_out, y_true_arr)
+
+
         diff_fc01_out = np.sum((paddle_fc01_out - my_fc01_out)**2)
         print('diff_fc01_out=%.6f' % diff_fc01_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
-
-        # 2.fc层
-        my_fc02_out = fc02.train_forward(my_fc01_out)
         diff_fc02_out = np.sum((paddle_fc02_out - my_fc02_out)**2)
         print('diff_fc02_out=%.6f' % diff_fc02_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
-
-        # 3.损失函数层
-        my_mseloss_out = mse01.train_forward(my_fc02_out, y_true_arr)
         diff_mseloss_out = np.sum((paddle_mseloss_out - my_mseloss_out)**2)
         print('diff_mseloss_out=%.6f' % diff_mseloss_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
 
         print('\ntrain_backward:')
         # 纯python搭建的神经网络进行反向传播啦！求偏导数即可。反向传播会更新权重，我们期望和飞桨有相同的权重。
-        # 3.损失函数层
         my_fc02_out_grad = mse01.train_backward(lr)
-        # 2.fc层
         my_fc01_out_grad = fc02.train_backward(my_fc02_out_grad, lr)
-        # 1.fc层
         inputs_grad = fc01.train_backward(my_fc01_out_grad, lr)
 
         # 和飞桨更新后的权重校验。
@@ -138,6 +132,7 @@ if __name__ == '__main__':
         paddle_fc01_bias = np.array(fluid.global_scope().find_var('fc01_bias').get_tensor())
         paddle_fc02_weights = np.array(fluid.global_scope().find_var('fc02_weights').get_tensor())
         paddle_fc02_bias = np.array(fluid.global_scope().find_var('fc02_bias').get_tensor())
+
 
         diff_fc02_weights = np.sum((paddle_fc02_weights - fc02.w)**2)
         print('diff_fc02_weights=%.6f' % diff_fc02_weights)   # 若是0，则表示成功模拟出权重更新

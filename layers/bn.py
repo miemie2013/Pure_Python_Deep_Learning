@@ -194,24 +194,26 @@ class BatchNorm(Layer):
         epsilon = self.epsilon
 
         # loss对Bias的偏导数
-        dbias = np.sum(grad, axis=(0, 2, 3))  # 中文记法：等于loss对本层输出的梯度 对NHW维求和。
+        dBias = np.sum(grad, axis=(0, 2, 3))  # 中文记法：等于loss对本层输出的梯度 对NHW维求和。
 
         # 看飞桨的源码，看看标准差有没有涉及到epsilon？？？
         # loss对Scale的偏导数。这玩意就是bn层里loss对Scale的偏导数了，熟记。过了面试的话不用谢我。
-        dscale = grad * (x-self.cur_mean) / ((self.cur_var + epsilon)**0.5)  # 中文记法：等于loss对本层输出的梯度 乘以 本层输入归一化后的值（用的是这一批的均值和方差进行归一化），再对NHW维求和。
-        dscale = np.sum(dscale, axis=(0, 2, 3))
+        dScale = grad * (x-self.cur_mean) / ((self.cur_var + epsilon)**0.5)  # 中文记法：等于loss对本层输出的梯度 乘以 本层输入归一化后的值（用的是这一批的均值和方差进行归一化），再对NHW维求和。
+        dScale = np.sum(dScale, axis=(0, 2, 3))
+
 
         # 看飞桨的源码，看看标准差有没有涉及到epsilon？？？
         # loss对输入x的偏导数，用来更新前面的层的权重
-        scale = np.reshape(np.copy(Scale), (1, -1, 1, 1))
-        scale = np.tile(scale, (N, 1, H, W))
-        dx = grad * scale / (self.cur_var+epsilon) * ((1 - 1.0/(N*H*W))*(self.cur_var+epsilon)**0.5 - (x-self.cur_mean)**2/((N*H*W)*(self.cur_var+epsilon)**0.5))
+        exp_Scale = np.reshape(Scale, (1, -1, 1, 1))         # [1, C, 1, 1]
+        dnormX = grad * exp_Scale               # [N, C, H, W]
+        dX = dnormX
 
-        Bias += -1.0 * lr * dbias  # 更新Bias
-        Scale += -1.0 * lr * dscale  # 更新Scale
+        # 更新可训练参数
+        Bias += -1.0 * lr * dBias  # 更新Bias
+        Scale += -1.0 * lr * dScale  # 更新Scale
         self.offset = Bias
         self.scale = Scale
-        return dx
+        return dX
 
 
 
