@@ -3,19 +3,11 @@
 # Pure_Python_Deep_Learning
 
 ## 概述
-《纯python实现一个深度学习框架》课程源码。带你深入理解神经网络底层计算细节。为了验证结果的正确性，本人将会拿它的结果与百度飞桨的结果进行校验。
-
-配套视频课程↓
-
-本人西瓜视频账号：https://www.ixigua.com/home/2088721227199148
-
-本人B站账号：https://space.bilibili.com/628382224/
+纯python实现一个深度学习框架。带你深入理解神经网络底层计算细节。为了验证结果的正确性，本人将会拿它的结果与百度飞桨的结果进行校验。
 
 本人微信公众号：miemie_2013
 
 Q群：645796480
-
-会在这两个视频账号放送，快来点关注吧！
 
 ## 咩酱刷屏时刻
 
@@ -67,10 +59,6 @@ pip install numpy -i https://mirror.baidu.com/pypi/simple
 ## 传送门
 cv算法交流q群：645796480
 但是关于仓库的疑问尽量在Issues上提，避免重复解答。
-
-本人西瓜视频账号：https://www.ixigua.com/home/2088721227199148
-
-本人B站账号：https://space.bilibili.com/628382224/
 
 本人微信公众号：miemie_2013
 
