@@ -19,10 +19,12 @@ class Conv2D(Layer):
                  stride=1,
                  padding=0,
                  use_bias=False,
-                 conv_decay_type=None,
-                 conv_decay=0.,
-                 norm_decay_type=None,
-                 norm_decay=0.):
+                 w_decay_type=None,
+                 w_decay=0.,
+                 b_decay_type=None,
+                 b_decay=0.,
+                 w_lr=1.,
+                 b_lr=1.):
         super(Conv2D, self).__init__()
 
         self.in_C = in_C
@@ -32,12 +34,14 @@ class Conv2D(Layer):
         self.stride = stride
         self.padding = padding
         self.num_filters = num_filters
-        assert conv_decay_type in ['L1Decay', 'L2Decay', None]
-        assert norm_decay_type in ['L1Decay', 'L2Decay', None]
-        self.conv_decay_type = conv_decay_type
-        self.norm_decay_type = norm_decay_type
-        self.conv_decay = conv_decay
-        self.norm_decay = norm_decay
+        assert w_decay_type in ['L1Decay', 'L2Decay', None]
+        assert b_decay_type in ['L1Decay', 'L2Decay', None]
+        self.w_decay_type = w_decay_type
+        self.b_decay_type = b_decay_type
+        self.w_decay = w_decay
+        self.b_decay = b_decay
+        self.w_lr = w_lr
+        self.b_lr = b_lr
 
         self.w = np.zeros((self.out_C, self.in_C, self.kH, self.kW), np.float32)
         self.b = None
@@ -150,9 +154,9 @@ class Conv2D(Layer):
         if b is not None:
             b = optimizer.update(b, dB)
             self.b = b
-        if self.conv_decay_type == 'L2Decay':
-            pass
-        w = optimizer.update(w, dW)
+        # if self.conv_decay_type == 'L2Decay':
+        #     pass
+        w = optimizer.update(w, dW, self.w_lr, decay_type=self.w_decay_type, decay_coeff=self.w_decay)
         self.w = w
         # loss对输入x的偏导数，用来更新前面的层的权重
         dx = dpad_x[:, :, padding:padding + H, padding:padding + W]

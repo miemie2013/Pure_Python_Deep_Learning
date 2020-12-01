@@ -36,7 +36,7 @@ import paddle
 paddle.enable_static()
 
 if __name__ == '__main__':
-    # 测试L2Decay()、Momentum优化算法
+    # 测试L2Decay()、卷积层参数学习率设为0.3和2.0（默认都是1.0）、Momentum优化算法
     use_gpu = False
 
     lr = 0.1
@@ -59,8 +59,8 @@ if __name__ == '__main__':
             act01_out_tensor = fluid.layers.leaky_relu(bn01_out_tensor, alpha=0.1)
 
             conv02_out_tensor = fluid.layers.conv2d(input=act01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1,
-                                                    param_attr=ParamAttr(name="conv02_weights"),
-                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.)))
+                                                    param_attr=ParamAttr(name="conv02_weights", learning_rate=0.3),
+                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.), learning_rate=2.0))
 
 
             # 建立损失函数
@@ -96,8 +96,8 @@ if __name__ == '__main__':
             act01_out_tensor = fluid.layers.leaky_relu(bn01_out_tensor, alpha=0.1)
 
             conv02_out_tensor = fluid.layers.conv2d(input=act01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1,
-                                                    param_attr=ParamAttr(name="conv02_weights"),
-                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.)))
+                                                    param_attr=ParamAttr(name="conv02_weights", learning_rate=0.3),
+                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.), learning_rate=2.0))
             eval_fetch_list = [bn01_out_tensor, conv02_out_tensor]
     eval_prog = eval_prog.clone(for_test=True)
     # 参数初始化
@@ -123,10 +123,10 @@ if __name__ == '__main__':
 
 
     #  纯python搭建的神经网络
-    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=False, conv_decay_type='L2Decay', conv_decay=0.0005)
+    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=False, w_decay_type='L2Decay', w_decay=0.0005)
     bn01 = BatchNorm(8, momentum=0.9, epsilon=1e-05)   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
     act01 = LeakyReLU(alpha=0.1)
-    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, conv_decay_type='L2Decay', conv_decay=0.0005)
+    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, w_decay_type='L2Decay', w_decay=0.0005, w_lr=0.3, b_lr=2.0)
     mse01 = MSELoss()
     optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重
