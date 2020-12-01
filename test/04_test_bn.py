@@ -30,6 +30,10 @@ from layers.bn import BatchNorm
 from layers.loss import MSELoss
 from layers.activations import *
 
+
+import paddle
+paddle.enable_static()
+
 if __name__ == '__main__':
     use_gpu = False
 
