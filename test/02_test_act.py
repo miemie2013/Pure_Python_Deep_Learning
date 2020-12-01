@@ -139,11 +139,11 @@ if __name__ == '__main__':
 
         print('\ntrain_backward:')
         # 纯python搭建的神经网络进行反向传播啦！求偏导数即可。反向传播会更新权重，我们期望和飞桨有相同的权重。
-        my_act02_out_grad = mse01.train_backward(lr)
-        my_fc02_out_grad = act02.train_backward(my_act02_out_grad, lr)
-        my_act01_out_grad = fc02.train_backward(my_fc02_out_grad, lr)
-        my_fc01_out_grad = act01.train_backward(my_act01_out_grad, lr)
-        inputs_grad = fc01.train_backward(my_fc01_out_grad, lr)
+        my_act02_out_grad = mse01.train_backward(optimizer2)
+        my_fc02_out_grad = act02.train_backward(my_act02_out_grad, optimizer2)
+        my_act01_out_grad = fc02.train_backward(my_fc02_out_grad, optimizer2)
+        my_fc01_out_grad = act01.train_backward(my_act01_out_grad, optimizer2)
+        inputs_grad = fc01.train_backward(my_fc01_out_grad, optimizer2)
 
         # ==================== test ====================
         test_data = np.random.normal(loc=0, scale=1, size=(2, 3)).astype(np.float32)

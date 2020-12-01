@@ -52,7 +52,7 @@ class FC(Layer):
         self.output = np.copy(out)   # 保存一下输出，反向传播时会使用到
         return out
 
-    def train_backward(self, grad, lr):
+    def train_backward(self, grad, optimizer):
         '''
         对本层的权重求偏导，以更新本层的权重。对本层的输入x求偏导，以更新前面的层的权重。
         设本层的权重是w，若loss = f(a, b, c, ...) = a(w)+b(w)+c(w)+...，那么loss对w的偏导数(偏导符号打不出来，用d表示了)
@@ -83,9 +83,9 @@ class FC(Layer):
 
         # 更新可训练参数
         if b is not None:
-            b += -1.0 * lr * dB
+            b = optimizer.update(b, dB)
             self.b = b
-        w += -1.0 * lr * dW
+        w = optimizer.update(w, dW)
         self.w = w
         return dX
 

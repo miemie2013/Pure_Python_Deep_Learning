@@ -25,7 +25,7 @@ class MSELoss(LossLayer):
         self.output = np.copy(loss)   # 保存一下输出，反向传播时会使用到
         return loss
 
-    def train_backward(self, lr):
+    def train_backward(self, optimizer):
         '''
         因为损失层mseloss损失层没有可训练权重，所以直接对本层的输入y_pred求偏导，以更新前面的层的权重。
         y_pred里的元素用y表示，y_true里的元素用Y表示。为了提高泛用性，y_pred不一定是4维。

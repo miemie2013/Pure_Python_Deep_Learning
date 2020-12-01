@@ -150,6 +150,8 @@ class Conv2D(Layer):
         if b is not None:
             b = optimizer.update(b, dB)
             self.b = b
+        if self.conv_decay_type == 'L2Decay':
+            pass
         w = optimizer.update(w, dW)
         self.w = w
         # loss对输入x的偏导数，用来更新前面的层的权重

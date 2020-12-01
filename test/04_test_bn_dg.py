@@ -167,13 +167,13 @@ if __name__ == '__main__':
 
         print('\ntrain_backward:')
         # 纯python搭建的神经网络进行反向传播啦！求偏导数即可。反向传播会更新权重，我们期望和飞桨有相同的权重。
-        my_act02_out_grad = mse01.train_backward(lr)
-        my_bn02_out_grad = act02.train_backward(my_act02_out_grad, lr)
-        my_conv02_out_grad = bn02.train_backward(my_bn02_out_grad, lr)
-        my_act01_out_grad = conv02.train_backward(my_conv02_out_grad, lr)
-        my_bn01_out_grad = act01.train_backward(my_act01_out_grad, lr)
-        my_conv01_out_grad = bn01.train_backward(my_bn01_out_grad, lr)
-        inputs_grad = conv01.train_backward(my_conv01_out_grad, lr)
+        my_act02_out_grad = mse01.train_backward(optimizer2)
+        my_bn02_out_grad = act02.train_backward(my_act02_out_grad, optimizer2)
+        my_conv02_out_grad = bn02.train_backward(my_bn02_out_grad, optimizer2)
+        my_act01_out_grad = conv02.train_backward(my_conv02_out_grad, optimizer2)
+        my_bn01_out_grad = act01.train_backward(my_act01_out_grad, optimizer2)
+        my_conv01_out_grad = bn01.train_backward(my_bn01_out_grad, optimizer2)
+        inputs_grad = conv01.train_backward(my_conv01_out_grad, optimizer2)
 
         # 和飞桨更新后的权重校验。
         paddle_bn01_scale = param_state_dict['conv1.bn.weight'].numpy()

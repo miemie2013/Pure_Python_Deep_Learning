@@ -128,9 +128,9 @@ if __name__ == '__main__':
 
         print('\ntrain_backward:')
         # 纯python搭建的神经网络进行反向传播啦！求偏导数即可。反向传播会更新权重，我们期望和飞桨有相同的权重。
-        my_fc02_out_grad = mse01.train_backward(lr)
-        my_fc01_out_grad = fc02.train_backward(my_fc02_out_grad, lr)
-        inputs_grad = fc01.train_backward(my_fc01_out_grad, lr)
+        my_fc02_out_grad = mse01.train_backward(optimizer2)
+        my_fc01_out_grad = fc02.train_backward(my_fc02_out_grad, optimizer2)
+        inputs_grad = fc01.train_backward(my_fc01_out_grad, optimizer2)
 
         # 和飞桨更新后的权重校验。
         paddle_fc01_weights = np.array(fluid.global_scope().find_var('fc01_weights').get_tensor())
