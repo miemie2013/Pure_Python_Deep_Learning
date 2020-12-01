@@ -91,11 +91,10 @@ class Momentum(Optimizer):
             #       = param - lr * dparam - lr * decay_coeff * param
             #       = (1.0 - lr * decay_coeff) * param - lr * dparam
             # 推导完成。
-            keep = (1.0 - lr * decay_coeff)   # keep通常是0.999...这样的值，即param先乘以一个0.999...的值进行衰减再减去lr * dparam。
-
             velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
-            velocity = momentum * velocity + dparam
-            param = keep * param - lr * velocity
+            dloss_new = dparam + decay_coeff * param
+            velocity = momentum * velocity + dloss_new
+            param = param - lr * velocity
             self.velocities[param_name] = velocity
         elif decay_type == 'L1Decay':
             # L2正则化，即在损失函数上加上该参数的绝对值项：
