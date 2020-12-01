@@ -29,6 +29,8 @@ from layers.conv2d import Conv2D
 from layers.bn import BatchNorm
 from layers.loss import MSELoss
 from layers.activations import *
+from layers.optimizer import *
+
 from test.custom_layers import *
 
 import paddle
@@ -108,6 +110,7 @@ if __name__ == '__main__':
     bn02 = BatchNorm(8, momentum=0.9, epsilon=1e-05)   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
     act02 = LeakyReLU(alpha=0.1)
     mse01 = MSELoss()
+    optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重
     conv01.init_weights(paddle_conv01_weights, paddle_conv01_bias)
     bn01.init_weights(paddle_bn01_scale, paddle_bn01_offset)

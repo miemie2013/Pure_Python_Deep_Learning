@@ -24,7 +24,7 @@ class Sigmoid(ActivationLayer):
         self.output = np.copy(out)   # 保存一下输出，反向传播时会使用到
         return out
 
-    def train_backward(self, grad, lr):
+    def train_backward(self, grad, optimizer):
         '''
         对本层的输入x求偏导，以更新前面的层的权重。
         y = sigmoid(x)
@@ -51,7 +51,7 @@ class ReLU(ActivationLayer):
         self.output = np.copy(out)   # 保存一下输出，反向传播时会使用到
         return out
 
-    def train_backward(self, grad, lr):
+    def train_backward(self, grad, optimizer):
         '''
         对本层的输入x求偏导，以更新前面的层的权重。
         y = ReLU(x)
@@ -82,7 +82,7 @@ class LeakyReLU(ActivationLayer):
         self.output = np.copy(out)   # 保存一下输出，反向传播时会使用到
         return out
 
-    def train_backward(self, grad, lr):
+    def train_backward(self, grad, optimizer):
         '''
         对本层的输入x求偏导，以更新前面的层的权重。
         y = LeakyReLU(x)

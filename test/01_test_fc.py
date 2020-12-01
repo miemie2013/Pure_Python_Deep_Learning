@@ -27,6 +27,7 @@ from paddle.fluid.regularizer import L2Decay
 from layers.fc import FC
 from layers.bn import BatchNorm
 from layers.loss import MSELoss
+from layers.optimizer import *
 
 import paddle
 paddle.enable_static()
@@ -95,6 +96,7 @@ if __name__ == '__main__':
     fc01 = FC(3, 8, use_bias=True)
     fc02 = FC(8, 8, use_bias=True)
     mse01 = MSELoss()
+    optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重
     fc01.init_weights(paddle_fc01_weights, paddle_fc01_bias)
     fc02.init_weights(paddle_fc02_weights, paddle_fc02_bias)

@@ -29,12 +29,14 @@ from layers.conv2d import Conv2D
 from layers.bn import BatchNorm
 from layers.loss import MSELoss
 from layers.activations import *
+from layers.optimizer import *
 
 
 import paddle
 paddle.enable_static()
 
 if __name__ == '__main__':
+    # 测试L2Decay()、Momentum优化算法
     use_gpu = False
 
     lr = 0.1
@@ -50,15 +52,15 @@ if __name__ == '__main__':
             bn01_out_tensor = fluid.layers.batch_norm(
                 input=conv01_out_tensor,
                 is_test=False,
-                param_attr=ParamAttr(initializer=fluid.initializer.Constant(1.0), name=bn_name + '_scale'),
-                bias_attr=ParamAttr(initializer=fluid.initializer.Constant(0.0), name=bn_name + '_offset'),
+                param_attr=ParamAttr(initializer=fluid.initializer.Constant(1.0), name=bn_name + '_scale', regularizer=L2Decay(0.)),
+                bias_attr=ParamAttr(initializer=fluid.initializer.Constant(0.0), name=bn_name + '_offset', regularizer=L2Decay(0.)),
                 moving_mean_name=bn_name + '_mean',
                 moving_variance_name=bn_name + '_variance')
             act01_out_tensor = fluid.layers.leaky_relu(bn01_out_tensor, alpha=0.1)
 
             conv02_out_tensor = fluid.layers.conv2d(input=act01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1,
                                                     param_attr=ParamAttr(name="conv02_weights"),
-                                                    bias_attr=ParamAttr(name="conv02_bias"))
+                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.)))
 
 
             # 建立损失函数
@@ -68,7 +70,11 @@ if __name__ == '__main__':
             mseloss = P.reduce_mean(mseloss)       # 再求平均，即mse损失函数
 
             # 优化器，选SGD
-            optimizer = fluid.optimizer.SGD(learning_rate=lr)
+            # optim_args = dict(momentum=0.9,)
+            optim_args = dict()
+            regularization = fluid.regularizer.L2Decay(0.0005)
+            # regularization = None
+            optimizer = fluid.optimizer.SGD(learning_rate=lr, regularization=regularization, **optim_args)
             optimizer.minimize(mseloss)
 
 
@@ -78,21 +84,20 @@ if __name__ == '__main__':
             # 重新建立一次网络，用相同的张量名，不用写损失层
             inputs = P.data(name='input_1', shape=[-1, 3, 28, 28], append_batch_size=False, dtype='float32')
             conv01_out_tensor = fluid.layers.conv2d(input=inputs, num_filters=8, filter_size=1, stride=1, padding=0,
-                                                    param_attr=ParamAttr(name="conv01_weights"),
-                                                    bias_attr=ParamAttr(name="conv01_bias"))
+                                                    param_attr=ParamAttr(name="conv01_weights"))
             bn_name = "bn01"
             bn01_out_tensor = fluid.layers.batch_norm(
                 input=conv01_out_tensor,
                 is_test=False,
-                param_attr=ParamAttr(initializer=fluid.initializer.Constant(1.0), name=bn_name + '_scale'),
-                bias_attr=ParamAttr(initializer=fluid.initializer.Constant(0.0), name=bn_name + '_offset'),
+                param_attr=ParamAttr(initializer=fluid.initializer.Constant(1.0), name=bn_name + '_scale', regularizer=L2Decay(0.)),
+                bias_attr=ParamAttr(initializer=fluid.initializer.Constant(0.0), name=bn_name + '_offset', regularizer=L2Decay(0.)),
                 moving_mean_name=bn_name + '_mean',
                 moving_variance_name=bn_name + '_variance')
             act01_out_tensor = fluid.layers.leaky_relu(bn01_out_tensor, alpha=0.1)
 
             conv02_out_tensor = fluid.layers.conv2d(input=act01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1,
                                                     param_attr=ParamAttr(name="conv02_weights"),
-                                                    bias_attr=ParamAttr(name="conv02_bias"))
+                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.)))
             eval_fetch_list = [bn01_out_tensor, conv02_out_tensor]
     eval_prog = eval_prog.clone(for_test=True)
     # 参数初始化
@@ -106,7 +111,6 @@ if __name__ == '__main__':
     # 纯python搭建的神经网络的权重。初始值是paddle相同层的初始值。为了模拟paddle训练过程。
     # 1.卷积层
     paddle_conv01_weights = np.array(fluid.global_scope().find_var('conv01_weights').get_tensor())
-    paddle_conv01_bias = np.array(fluid.global_scope().find_var('conv01_bias').get_tensor())
     # 2.bn层
     paddle_bn01_scale = np.array(fluid.global_scope().find_var('bn01_scale').get_tensor())
     paddle_bn01_offset = np.array(fluid.global_scope().find_var('bn01_offset').get_tensor())
@@ -116,23 +120,20 @@ if __name__ == '__main__':
     # 4.卷积层
     paddle_conv02_weights = np.array(fluid.global_scope().find_var('conv02_weights').get_tensor())
     paddle_conv02_bias = np.array(fluid.global_scope().find_var('conv02_bias').get_tensor())
-    
+
 
     #  纯python搭建的神经网络
-    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=True)
+    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=False)
     bn01 = BatchNorm(8, momentum=0.9, epsilon=1e-05)   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
     act01 = LeakyReLU(alpha=0.1)
     conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True)
-    bn02 = BatchNorm(8, momentum=0.9, epsilon=1e-05)   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
-    act02 = LeakyReLU(alpha=0.1)
     mse01 = MSELoss()
+    optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重
-    conv01.init_weights(paddle_conv01_weights, paddle_conv01_bias)
+    conv01.init_weights(paddle_conv01_weights, None)
     bn01.init_weights(paddle_bn01_scale, paddle_bn01_offset)
     bn01.init_means_vars(paddle_bn01_mean, paddle_bn01_variance)
     conv02.init_weights(paddle_conv02_weights, paddle_conv02_bias)
-    bn02.init_weights(paddle_bn02_scale, paddle_bn02_offset)
-    bn02.init_means_vars(paddle_bn02_mean, paddle_bn02_variance)
 
 
     # 只训练8步
@@ -142,8 +143,8 @@ if __name__ == '__main__':
         batch_data = np.random.normal(loc=0, scale=1, size=(2, 3, 28, 28)).astype(np.float32)
         y_true_arr = np.random.normal(loc=0, scale=1, size=(2, 8, 28, 28)).astype(np.float32)
 
-        paddle_mseloss_out, paddle_bn01_out, paddle_bn02_out = exe.run(train_prog, feed={"input_1": batch_data, "y_true": y_true_arr, },
-                                                                       fetch_list=[mseloss, bn01_out_tensor, bn02_out_tensor])
+        paddle_mseloss_out, paddle_bn01_out, paddle_conv02_out = exe.run(train_prog, feed={"input_1": batch_data, "y_true": y_true_arr, },
+                                                                       fetch_list=[mseloss, bn01_out_tensor, conv02_out_tensor])
 
         print('train_forward:')
         # python代码模拟训练过程，与paddle的输出校验。我们希望和飞桨有相同的输出。
@@ -151,53 +152,48 @@ if __name__ == '__main__':
         my_bn01_out = bn01.train_forward(my_conv01_out)
         my_act01_out = act01.train_forward(my_bn01_out)
         my_conv02_out = conv02.train_forward(my_act01_out)
-        my_bn02_out = bn02.train_forward(my_conv02_out)
-        my_act02_out = act02.train_forward(my_bn02_out)
-        my_mseloss_out = mse01.train_forward(my_act02_out, y_true_arr)
+        my_mseloss_out = mse01.train_forward(my_conv02_out, y_true_arr)
 
 
         diff_bn01_out = np.sum((paddle_bn01_out - my_bn01_out)**2)
         print('diff_bn01_out=%.6f' % diff_bn01_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
-        diff_bn02_out = np.sum((paddle_bn02_out - my_bn02_out)**2)
-        print('diff_bn02_out=%.6f' % diff_bn02_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
+        diff_conv02_out = np.sum((paddle_conv02_out - my_conv02_out)**2)
+        print('diff_conv02_out=%.6f' % diff_conv02_out)   # 若是0，则表示成功模拟出PaddlePaddle的输出结果
         diff_mseloss_out = np.sum((paddle_mseloss_out - my_mseloss_out)**2)
         print('diff_mseloss_out=%.6f' % diff_mseloss_out)   # 若是0，则表示成功模拟出PaddlePaddle bn层的输出结果
 
         print('\ntrain_backward:')
         # 纯python搭建的神经网络进行反向传播啦！求偏导数即可。反向传播会更新权重，我们期望和飞桨有相同的权重。
-        my_act02_out_grad = mse01.train_backward(lr)
-        my_bn02_out_grad = act02.train_backward(my_act02_out_grad, lr)
-        my_conv02_out_grad = bn02.train_backward(my_bn02_out_grad, lr)
+        my_conv02_out_grad = mse01.train_backward(lr)
         my_act01_out_grad = conv02.train_backward(my_conv02_out_grad, lr)
         my_bn01_out_grad = act01.train_backward(my_act01_out_grad, lr)
         my_conv01_out_grad = bn01.train_backward(my_bn01_out_grad, lr)
         inputs_grad = conv01.train_backward(my_conv01_out_grad, lr)
 
         # 和飞桨更新后的权重校验。
+        paddle_conv01_weights = np.array(fluid.global_scope().find_var('conv01_weights').get_tensor())
         paddle_bn01_scale = np.array(fluid.global_scope().find_var('bn01_scale').get_tensor())
         paddle_bn01_offset = np.array(fluid.global_scope().find_var('bn01_offset').get_tensor())
         paddle_bn01_mean = np.array(fluid.global_scope().find_var('bn01_mean').get_tensor())
         paddle_bn01_variance = np.array(fluid.global_scope().find_var('bn01_variance').get_tensor())
-        paddle_bn02_scale = np.array(fluid.global_scope().find_var('bn02_scale').get_tensor())
-        paddle_bn02_offset = np.array(fluid.global_scope().find_var('bn02_offset').get_tensor())
-        paddle_bn02_mean = np.array(fluid.global_scope().find_var('bn02_mean').get_tensor())
-        paddle_bn02_variance = np.array(fluid.global_scope().find_var('bn02_variance').get_tensor())
+        paddle_conv02_weights = np.array(fluid.global_scope().find_var('conv02_weights').get_tensor())
+        paddle_conv02_bias = np.array(fluid.global_scope().find_var('conv02_bias').get_tensor())
 
 
-        diff_bn02_scale = np.sum((paddle_bn02_scale - bn02.scale)**2)
-        print('diff_bn02_scale=%.6f' % diff_bn02_scale)   # 若是0，则表示成功模拟出权重更新
-        diff_bn02_offset = np.sum((paddle_bn02_offset - bn02.offset)**2)
-        print('diff_bn02_offset=%.6f' % diff_bn02_offset)   # 若是0，则表示成功模拟出权重更新
+        diff_conv02_weights = np.sum((paddle_conv02_weights - conv02.w)**2)
+        print('diff_conv02_weights=%.6f' % diff_conv02_weights)   # 若是0，则表示成功模拟出权重更新
+        diff_conv02_bias = np.sum((paddle_conv02_bias - conv02.b)**2)
+        print('diff_conv02_bias=%.6f' % diff_conv02_bias)   # 若是0，则表示成功模拟出权重更新
+
         diff_bn01_scale = np.sum((paddle_bn01_scale - bn01.scale)**2)
         print('diff_bn01_scale=%.6f' % diff_bn01_scale)   # 若是0，则表示成功模拟出权重更新
         diff_bn01_offset = np.sum((paddle_bn01_offset - bn01.offset)**2)
         print('diff_bn01_offset=%.6f' % diff_bn01_offset)   # 若是0，则表示成功模拟出权重更新
 
+        diff_conv01_weights = np.sum((paddle_conv01_weights - conv01.w)**2)
+        print('diff_conv01_weights=%.6f' % diff_conv01_weights)   # 若是0，则表示成功模拟出权重更新
+
         # 均值和方差，在train_forward()阶段就已经被更新
-        diff_bn02_mean = np.sum((paddle_bn02_mean - bn02.mean)**2)
-        print('diff_bn02_mean=%.6f' % diff_bn02_mean)   # 若是0，则表示成功模拟出均值更新
-        diff_bn02_variance = np.sum((paddle_bn02_variance - bn02.var)**2)
-        print('diff_bn02_variance=%.6f' % diff_bn02_variance)   # 若是0，则表示成功模拟出方差更新
         diff_bn01_mean = np.sum((paddle_bn01_mean - bn01.mean)**2)
         print('diff_bn01_mean=%.6f' % diff_bn01_mean)   # 若是0，则表示成功模拟出均值更新
         diff_bn01_variance = np.sum((paddle_bn01_variance - bn01.var)**2)
@@ -205,19 +201,17 @@ if __name__ == '__main__':
 
         # ==================== test ====================
         test_data = np.random.normal(loc=0, scale=1, size=(2, 3, 28, 28)).astype(np.float32)
-        paddle_test_bn01_out, paddle_test_bn02_out = exe.run(compiled_eval_prog, feed={"input_1": test_data, }, fetch_list=eval_fetch_list)
+        paddle_test_bn01_out, paddle_test_conv02_out = exe.run(compiled_eval_prog, feed={"input_1": test_data, }, fetch_list=eval_fetch_list)
         # 自己网络的test
         print('\ntest_forward:')
         my_test_conv01_out = conv01.test_forward(test_data)
         my_test_bn01_out = bn01.test_forward(my_test_conv01_out)
         my_test_act01_out = act01.test_forward(my_test_bn01_out)
         my_test_conv02_out = conv02.test_forward(my_test_act01_out)
-        my_test_bn02_out = bn02.test_forward(my_test_conv02_out)
-        my_test_act02_out = act02.test_forward(my_test_bn02_out)
         diff_test_bn01_out = np.sum((paddle_test_bn01_out - my_test_bn01_out)**2)
         print('diff_test_bn01_out=%.6f' % diff_test_bn01_out)   # 若是0，则表示成功模拟出推理
-        diff_test_bn02_out = np.sum((paddle_test_bn02_out - my_test_bn02_out)**2)
-        print('diff_test_bn02_out=%.6f' % diff_test_bn02_out)   # 若是0，则表示成功模拟出推理
+        diff_test_conv02_out = np.sum((paddle_test_conv02_out - my_test_conv02_out)**2)
+        print('diff_test_conv02_out=%.6f' % diff_test_conv02_out)   # 若是0，则表示成功模拟出推理
 
 
 

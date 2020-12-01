@@ -28,6 +28,7 @@ from layers.fc import FC
 from layers.bn import BatchNorm
 from layers.loss import MSELoss
 from layers.activations import *
+from layers.optimizer import *
 
 import paddle
 paddle.enable_static()
@@ -101,6 +102,7 @@ if __name__ == '__main__':
     fc02 = FC(8, 8, use_bias=True)
     act02 = Sigmoid()
     mse01 = MSELoss()
+    optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重
     fc01.init_weights(paddle_fc01_weights, paddle_fc01_bias)
     fc02.init_weights(paddle_fc02_weights, paddle_fc02_bias)

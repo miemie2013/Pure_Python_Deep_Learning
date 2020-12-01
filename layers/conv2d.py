@@ -18,7 +18,11 @@ class Conv2D(Layer):
                  filter_size,
                  stride=1,
                  padding=0,
-                 use_bias=False):
+                 use_bias=False,
+                 conv_decay_type=None,
+                 conv_decay=0.,
+                 norm_decay_type=None,
+                 norm_decay=0.):
         super(Conv2D, self).__init__()
 
         self.in_C = in_C
@@ -28,7 +32,12 @@ class Conv2D(Layer):
         self.stride = stride
         self.padding = padding
         self.num_filters = num_filters
-        self.num_filters = num_filters
+        assert conv_decay_type in ['L1Decay', 'L2Decay', None]
+        assert norm_decay_type in ['L1Decay', 'L2Decay', None]
+        self.conv_decay_type = conv_decay_type
+        self.norm_decay_type = norm_decay_type
+        self.conv_decay = conv_decay
+        self.norm_decay = norm_decay
 
         self.w = np.zeros((self.out_C, self.in_C, self.kH, self.kW), np.float32)
         self.b = None
@@ -83,7 +92,7 @@ class Conv2D(Layer):
         self.output = np.copy(out)   # 保存一下输出，反向传播时会使用到
         return out
 
-    def train_backward(self, grad, lr):
+    def train_backward(self, grad, optimizer):
         '''
         对本层的权重求偏导，以更新本层的权重。对本层的输入x求偏导，以更新前面的层的权重。
         设本层的权重是w，若loss = f(a, b, c, ...) = a(w)+b(w)+c(w)+...，那么loss对w的偏导数(偏导符号打不出来，用d表示了)
@@ -139,9 +148,9 @@ class Conv2D(Layer):
 
         # 更新可训练参数
         if b is not None:
-            b += -1.0 * lr * dB
+            b = optimizer.update(b, dB)
             self.b = b
-        w += -1.0 * lr * dW
+        w = optimizer.update(w, dW)
         self.w = w
         # loss对输入x的偏导数，用来更新前面的层的权重
         dx = dpad_x[:, :, padding:padding + H, padding:padding + W]

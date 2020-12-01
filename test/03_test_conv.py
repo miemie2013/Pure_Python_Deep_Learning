@@ -28,6 +28,7 @@ from layers.fc import FC
 from layers.conv2d import Conv2D
 from layers.bn import BatchNorm
 from layers.loss import MSELoss
+from layers.optimizer import *
 
 
 import paddle
@@ -96,6 +97,7 @@ if __name__ == '__main__':
     conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=True)
     conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True)
     mse01 = MSELoss()
+    optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重
     conv01.init_weights(paddle_conv01_weights, paddle_conv01_bias)
     conv02.init_weights(paddle_conv02_weights, paddle_conv02_bias)

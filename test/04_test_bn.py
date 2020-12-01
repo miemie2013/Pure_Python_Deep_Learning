@@ -29,6 +29,7 @@ from layers.conv2d import Conv2D
 from layers.bn import BatchNorm
 from layers.loss import MSELoss
 from layers.activations import *
+from layers.optimizer import *
 
 
 import paddle
@@ -151,6 +152,7 @@ if __name__ == '__main__':
     bn02 = BatchNorm(8, momentum=0.9, epsilon=1e-05)   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
     act02 = LeakyReLU(alpha=0.1)
     mse01 = MSELoss()
+    optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重
     conv01.init_weights(paddle_conv01_weights, paddle_conv01_bias)
     bn01.init_weights(paddle_bn01_scale, paddle_bn01_offset)
@@ -190,13 +192,13 @@ if __name__ == '__main__':
 
         print('\ntrain_backward:')
         # 纯python搭建的神经网络进行反向传播啦！求偏导数即可。反向传播会更新权重，我们期望和飞桨有相同的权重。
-        my_act02_out_grad = mse01.train_backward(lr)
-        my_bn02_out_grad = act02.train_backward(my_act02_out_grad, lr)
-        my_conv02_out_grad = bn02.train_backward(my_bn02_out_grad, lr)
-        my_act01_out_grad = conv02.train_backward(my_conv02_out_grad, lr)
-        my_bn01_out_grad = act01.train_backward(my_act01_out_grad, lr)
-        my_conv01_out_grad = bn01.train_backward(my_bn01_out_grad, lr)
-        inputs_grad = conv01.train_backward(my_conv01_out_grad, lr)
+        my_act02_out_grad = mse01.train_backward(optimizer2)
+        my_bn02_out_grad = act02.train_backward(my_act02_out_grad, optimizer2)
+        my_conv02_out_grad = bn02.train_backward(my_bn02_out_grad, optimizer2)
+        my_act01_out_grad = conv02.train_backward(my_conv02_out_grad, optimizer2)
+        my_bn01_out_grad = act01.train_backward(my_act01_out_grad, optimizer2)
+        my_conv01_out_grad = bn01.train_backward(my_bn01_out_grad, optimizer2)
+        inputs_grad = conv01.train_backward(my_conv01_out_grad, optimizer2)
 
         # 和飞桨更新后的权重校验。
         paddle_bn01_scale = np.array(fluid.global_scope().find_var('bn01_scale').get_tensor())
