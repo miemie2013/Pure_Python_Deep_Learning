@@ -49,10 +49,9 @@ bn层，课件，Add，Concat，池化层（类似卷积层），Resnet50，上�
 
 ## 环境搭建
 
-与飞桨1.8.0版本校验，cpu或gpu版皆可。
+与飞桨2.0.0rc0版本校验，cpu或gpu版皆可。
 ```
-pip install paddlepaddle==1.8.0 -i https://mirror.baidu.com/pypi/simple
-pip install paddlepaddle-gpu==1.8.0.post107 -i https://mirror.baidu.com/pypi/simple
+python -m pip install paddlepaddle_gpu==2.0.0rc0 -f https://paddlepaddle.org.cn/whl/stable.html
 pip install numpy -i https://mirror.baidu.com/pypi/simple
 ```
 
