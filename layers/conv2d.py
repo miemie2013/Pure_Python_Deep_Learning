@@ -152,11 +152,9 @@ class Conv2D(Layer):
 
         # 更新可训练参数
         if b is not None:
-            b = optimizer.update(b, dB)
+            b = optimizer.update(b, dB, self.b_lr, self.b_decay_type, self.b_decay)
             self.b = b
-        # if self.conv_decay_type == 'L2Decay':
-        #     pass
-        w = optimizer.update(w, dW, self.w_lr, decay_type=self.w_decay_type, decay_coeff=self.w_decay)
+        w = optimizer.update(w, dW, self.w_lr, self.w_decay_type, self.w_decay)
         self.w = w
         # loss对输入x的偏导数，用来更新前面的层的权重
         dx = dpad_x[:, :, padding:padding + H, padding:padding + W]
