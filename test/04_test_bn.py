@@ -37,7 +37,7 @@ paddle.enable_static()
 if __name__ == '__main__':
     use_gpu = False
 
-    lr = 0.001
+    lr = 0.1
 
     startup_prog = fluid.Program()
     train_prog = fluid.Program()
