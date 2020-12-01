@@ -24,7 +24,8 @@ class Conv2D(Layer):
                  b_decay_type=None,
                  b_decay=0.,
                  w_lr=1.,
-                 b_lr=1.):
+                 b_lr=1.,
+                 name=''):
         super(Conv2D, self).__init__()
 
         self.in_C = in_C
@@ -42,6 +43,7 @@ class Conv2D(Layer):
         self.b_decay = b_decay
         self.w_lr = w_lr
         self.b_lr = b_lr
+        self.name = name
 
         self.w = np.zeros((self.out_C, self.in_C, self.kH, self.kW), np.float32)
         self.b = None
@@ -152,9 +154,9 @@ class Conv2D(Layer):
 
         # 更新可训练参数
         if b is not None:
-            b = optimizer.update(b, dB, self.b_lr, self.b_decay_type, self.b_decay)
+            b = optimizer.update(self.name+'_bias', b, dB, self.b_lr, self.b_decay_type, self.b_decay)
             self.b = b
-        w = optimizer.update(w, dW, self.w_lr, self.w_decay_type, self.w_decay)
+        w = optimizer.update(self.name+'_weight', w, dW, self.w_lr, self.w_decay_type, self.w_decay)
         self.w = w
         # loss对输入x的偏导数，用来更新前面的层的权重
         dx = dpad_x[:, :, padding:padding + H, padding:padding + W]

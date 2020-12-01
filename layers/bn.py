@@ -15,12 +15,28 @@ class BatchNorm(Layer):
     def __init__(self,
                  in_C,
                  momentum=0.9,
-                 epsilon=1e-05):
+                 epsilon=1e-05,
+                 w_decay_type=None,
+                 w_decay=0.,
+                 b_decay_type=None,
+                 b_decay=0.,
+                 w_lr=1.,
+                 b_lr=1.,
+                 name=''):
         super(BatchNorm, self).__init__()
 
         self.in_C = in_C
         self.momentum = momentum
         self.epsilon = epsilon
+        assert w_decay_type in ['L1Decay', 'L2Decay', None]
+        assert b_decay_type in ['L1Decay', 'L2Decay', None]
+        self.w_decay_type = w_decay_type
+        self.b_decay_type = b_decay_type
+        self.w_decay = w_decay
+        self.b_decay = b_decay
+        self.w_lr = w_lr
+        self.b_lr = b_lr
+        self.name = name
 
         self.scale = np.ones((self.in_C, ), np.float32)    # 1初始化
         self.offset = np.zeros((self.in_C, ), np.float32)  # 0初始化
@@ -174,8 +190,8 @@ class BatchNorm(Layer):
             dX = dX.transpose(0, 3, 1, 2)   # NCHW格式
 
         # 更新可训练参数
-        Bias = optimizer.update(Bias, dBias)  # 更新Bias
-        Scale = optimizer.update(Scale, dScale)  # 更新Scale
+        Scale = optimizer.update(self.name+'_scale', Scale, dScale, self.w_lr, self.w_decay_type, self.w_decay)
+        Bias = optimizer.update(self.name+'_offset', Bias, dBias, self.b_lr, self.b_decay_type, self.b_decay)
         self.offset = Bias
         self.scale = Scale
         return dX

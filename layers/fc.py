@@ -15,11 +15,27 @@ class FC(Layer):
     def __init__(self,
                  in_C,
                  size,
-                 use_bias=False):
+                 use_bias=False,
+                 w_decay_type=None,
+                 w_decay=0.,
+                 b_decay_type=None,
+                 b_decay=0.,
+                 w_lr=1.,
+                 b_lr=1.,
+                 name=''):
         super(FC, self).__init__()
 
         self.in_C = in_C
         self.size = size
+        assert w_decay_type in ['L1Decay', 'L2Decay', None]
+        assert b_decay_type in ['L1Decay', 'L2Decay', None]
+        self.w_decay_type = w_decay_type
+        self.b_decay_type = b_decay_type
+        self.w_decay = w_decay
+        self.b_decay = b_decay
+        self.w_lr = w_lr
+        self.b_lr = b_lr
+        self.name = name
 
         self.w = np.zeros((self.in_C, self.size), np.float32)
         self.b = None
@@ -83,9 +99,9 @@ class FC(Layer):
 
         # 更新可训练参数
         if b is not None:
-            b = optimizer.update(b, dB)
+            b = optimizer.update(self.name + '_bias', b, dB, self.b_lr, self.b_decay_type, self.b_decay)
             self.b = b
-        w = optimizer.update(w, dW)
+        w = optimizer.update(self.name+'_weight', w, dW, self.w_lr, self.w_decay_type, self.w_decay)
         self.w = w
         return dX
 

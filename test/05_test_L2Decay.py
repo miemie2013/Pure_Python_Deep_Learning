@@ -69,12 +69,11 @@ if __name__ == '__main__':
             mseloss = P.pow(y_true - conv02_out_tensor, 2)
             mseloss = P.reduce_mean(mseloss)       # 再求平均，即mse损失函数
 
-            # 优化器，选SGD
-            # optim_args = dict(momentum=0.9,)
-            optim_args = dict()
+            # 优化器
+            optim_args = dict(momentum=0.9,)
             regularization = fluid.regularizer.L2Decay(0.0005)
-            # regularization = None
-            optimizer = fluid.optimizer.SGD(learning_rate=lr, regularization=regularization, **optim_args)
+            optimizer = fluid.optimizer.Momentum(learning_rate=lr, regularization=regularization, **optim_args)
+            # optimizer = fluid.optimizer.SGD(learning_rate=lr, regularization=regularization)
             optimizer.minimize(mseloss)
 
 
@@ -123,12 +122,13 @@ if __name__ == '__main__':
 
 
     #  纯python搭建的神经网络
-    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=False, w_decay_type='L2Decay', w_decay=0.0005)
-    bn01 = BatchNorm(8, momentum=0.9, epsilon=1e-05)   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
+    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=False, w_decay_type='L2Decay', w_decay=0.0005, name='conv01')
+    bn01 = BatchNorm(8, momentum=0.9, epsilon=1e-05, name='bn01')   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
     act01 = LeakyReLU(alpha=0.1)
-    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, w_decay_type='L2Decay', w_decay=0.0005, w_lr=0.3, b_lr=2.0)
+    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, w_decay_type='L2Decay', w_decay=0.0005, w_lr=0.3, b_lr=2.0, name='conv02')
     mse01 = MSELoss()
-    optimizer2 = SGD(lr=lr)
+    optimizer2 = Momentum(lr=lr, momentum=0.9, use_nesterov=False)
+    # optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重
     conv01.init_weights(paddle_conv01_weights, None)
     bn01.init_weights(paddle_bn01_scale, paddle_bn01_offset)
