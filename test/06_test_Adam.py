@@ -70,9 +70,9 @@ if __name__ == '__main__':
             mseloss = P.reduce_mean(mseloss)       # 再求平均，即mse损失函数
 
             # 优化器
-            optim_args = dict(momentum=0.9,)
+            optim_args = dict(beta1=0.9, beta2=0.999, epsilon=1e-8, lazy_mode=False)
             regularization = fluid.regularizer.L2Decay(0.0005)
-            optimizer = fluid.optimizer.Adam(learning_rate=lr, regularization=regularization, use_nesterov=False, **optim_args)
+            optimizer = fluid.optimizer.Adam(learning_rate=lr, regularization=regularization, **optim_args)
             optimizer.minimize(mseloss)
 
 
@@ -126,7 +126,8 @@ if __name__ == '__main__':
     act01 = LeakyReLU(alpha=0.1)
     conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, w_decay_type='L2Decay', w_decay=0.0005, w_lr=0.3, b_lr=2.0, name='conv02')
     mse01 = MSELoss()
-    optimizer2 = Momentum(lr=lr, momentum=0.9, use_nesterov=False)
+    optim_args = dict(beta1=0.9, beta2=0.999, epsilon=1e-8, lazy_mode=False)
+    optimizer2 = Adam(lr=lr, beta1=0.9, beta2=0.999, epsilon=1e-8, lazy_mode=False)
     # 初始化自己网络的权重
     conv01.init_weights(paddle_conv01_weights, None)
     bn01.init_weights(paddle_bn01_scale, paddle_bn01_offset)

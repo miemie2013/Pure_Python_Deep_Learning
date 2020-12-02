@@ -72,42 +72,38 @@ class Momentum(Optimizer):
         lr = self.lr   # 优化器的学习率
         lr = param_lr * lr   # 最终的学习率 = 参数的学习率 * 优化器的学习率
         momentum = self.momentum
+        velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
         if decay_type is None:
-            velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
             velocity = momentum * velocity + dparam   # 相较于SGD，用速度velocity代替梯度dparam。当前速度=momentum*历史速度 与 当前梯度 的矢量和。使得优化算法具有“惯性”。
             if self.use_nesterov:
                 param = param - lr * (dparam + momentum * velocity)
             else:
                 param = param - lr * velocity
-            self.velocities[param_name] = velocity
         elif decay_type == 'L2Decay':
             # L2正则化，即在损失函数上加上该参数的平方项：
             # loss_new = loss + 0.5 * decay_coeff * param^2
             # loss_new对param求偏导：
             # dparam_new = dparam + decay_coeff * param
             # 推导完成。
-            velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
             dparam_new = dparam + decay_coeff * param
             velocity = momentum * velocity + dparam_new   # L2正则相较于不用正则，只是将dparam替换成dparam_new。即稍微修改一下dparam。
             if self.use_nesterov:
                 param = param - lr * (dparam_new + momentum * velocity)
             else:
                 param = param - lr * velocity
-            self.velocities[param_name] = velocity
         elif decay_type == 'L1Decay':
             # L1正则化，即在损失函数上加上该参数的绝对值项：
             # loss_new = loss + decay_coeff * |param|
             # loss_new对param求偏导：
             # dparam_new = dparam + decay_coeff * sign(param)
             # 推导完成。
-            velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
             dparam_new = dparam + decay_coeff * np.sign(param)
             velocity = momentum * velocity + dparam_new   # L1正则相较于不用正则，只是将dparam替换成dparam_new。即稍微修改一下dparam。
             if self.use_nesterov:
                 param = param - lr * (dparam_new + momentum * velocity)
             else:
                 param = param - lr * velocity
-            self.velocities[param_name] = velocity
+        self.velocities[param_name] = velocity
         return param
 
 
@@ -117,55 +113,56 @@ class Momentum(Optimizer):
 class Adam(Optimizer):
     def __init__(self,
                  lr,
-                 momentum=0.9,
-                 use_nesterov=False):
+                 beta1=0.9,
+                 beta2=0.999,
+                 epsilon=1e-8,
+                 lazy_mode=False):
         super(Adam, self).__init__()
         self.lr = lr
-        self.momentum = momentum
-        self.use_nesterov = use_nesterov
-        self.velocities = {}
+        self.beta1 = beta1   # 一阶矩估计的指数衰减率。默认值为0.9
+        self.beta2 = beta2   # 二阶矩估计的指数衰减率。默认值为0.999
+        self.epsilon = epsilon   # 保持数值稳定性的短浮点类型值，默认值为1e-8
+        self.lazy_mode = lazy_mode
+        self.t = 0
+        self.moments_1 = {}
+        self.moments_2 = {}
 
     def update(self, param_name, param, dparam, param_lr=1.0, decay_type=None, decay_coeff=0.0):
         assert decay_type in ['L1Decay', 'L2Decay', None]
         lr = self.lr   # 优化器的学习率
         lr = param_lr * lr   # 最终的学习率 = 参数的学习率 * 优化器的学习率
-        momentum = self.momentum
+        beta1 = self.beta1
+        beta2 = self.beta2
+        self.t += 1
+        lr = lr / (1.0 - beta1 ** self.t)   # 一开始学习率很大，随着t增大而衰减到 参数的学习率 * 优化器的学习率
+        moment_1 = self.moments_1[param_name] if param_name in self.moments_1.keys() else np.zeros(dparam.shape)
+        moment_2 = self.moments_2[param_name] if param_name in self.moments_2.keys() else np.zeros(dparam.shape)
         if decay_type is None:
-            velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
-            velocity = momentum * velocity + dparam   # 相较于SGD，用速度velocity代替梯度dparam。当前速度=momentum*历史速度 与 当前梯度 的矢量和。使得优化算法具有“惯性”。
-            if self.use_nesterov:
-                param = param - lr * (dparam + momentum * velocity)
-            else:
-                param = param - lr * velocity
-            self.velocities[param_name] = velocity
+            moment_1 = beta1 * moment_1 + (1.0 - beta1) * dparam
+            moment_2 = beta2 * moment_2 + (1.0 - beta2) * dparam * dparam
+            param = param - lr * moment_1 / (moment_2 ** 0.5 + self.epsilon)  # 相较于SGD，用moment_1 / (moment_2 ** 0.5 + self.epsilon)代替梯度dparam。
         elif decay_type == 'L2Decay':
             # L2正则化，即在损失函数上加上该参数的平方项：
             # loss_new = loss + 0.5 * decay_coeff * param^2
             # loss_new对param求偏导：
             # dparam_new = dparam + decay_coeff * param
             # 推导完成。
-            velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
             dparam_new = dparam + decay_coeff * param
-            velocity = momentum * velocity + dparam_new   # L2正则相较于不用正则，只是将dparam替换成dparam_new。即稍微修改一下dparam。
-            if self.use_nesterov:
-                param = param - lr * (dparam_new + momentum * velocity)
-            else:
-                param = param - lr * velocity
-            self.velocities[param_name] = velocity
+            moment_1 = beta1 * moment_1 + (1.0 - beta1) * dparam_new
+            moment_2 = beta2 * moment_2 + (1.0 - beta2) * dparam_new * dparam_new
+            param = param - lr * moment_1 / (moment_2 ** 0.5 + self.epsilon)
         elif decay_type == 'L1Decay':
             # L1正则化，即在损失函数上加上该参数的绝对值项：
             # loss_new = loss + decay_coeff * |param|
             # loss_new对param求偏导：
             # dparam_new = dparam + decay_coeff * sign(param)
             # 推导完成。
-            velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
             dparam_new = dparam + decay_coeff * np.sign(param)
-            velocity = momentum * velocity + dparam_new   # L1正则相较于不用正则，只是将dparam替换成dparam_new。即稍微修改一下dparam。
-            if self.use_nesterov:
-                param = param - lr * (dparam_new + momentum * velocity)
-            else:
-                param = param - lr * velocity
-            self.velocities[param_name] = velocity
+            moment_1 = beta1 * moment_1 + (1.0 - beta1) * dparam_new
+            moment_2 = beta2 * moment_2 + (1.0 - beta2) * dparam_new * dparam_new
+            param = param - lr * moment_1 / (moment_2 ** 0.5 + self.epsilon)
+        self.moments_1[param_name] = moment_1
+        self.moments_2[param_name] = moment_2
         return param
 
 
