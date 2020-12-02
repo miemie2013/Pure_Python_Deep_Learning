@@ -295,12 +295,16 @@ class Conv2dUnit(paddle.nn.Layer):
             conv_out = self.conv(x)
         if self.bn:
             norm_out = self.bn(conv_out)
-        if self.gn:
+        elif self.gn:
             norm_out = self.gn(conv_out)
-        if self.af:
+        elif self.af:
             norm_out = fluid.layers.affine_channel(conv_out, scale=self.scale, bias=self.offset, act=None)
+        else:
+            norm_out = conv_out
         if self.act:
             act_out = self.act(norm_out)
+        else:
+            act_out = norm_out
         return conv_out, norm_out, act_out
 
 
