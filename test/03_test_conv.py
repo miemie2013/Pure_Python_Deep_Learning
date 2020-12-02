@@ -94,8 +94,8 @@ if __name__ == '__main__':
     # 3.损失函数层，没有权重。
 
     #  纯python搭建的神经网络
-    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=True)
-    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True)
+    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=True, name='conv01')
+    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, name='conv02')
     mse01 = MSELoss()
     optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重

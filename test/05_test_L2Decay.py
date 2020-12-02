@@ -73,7 +73,6 @@ if __name__ == '__main__':
             optim_args = dict(momentum=0.9,)
             regularization = fluid.regularizer.L2Decay(0.0005)
             optimizer = fluid.optimizer.Momentum(learning_rate=lr, regularization=regularization, use_nesterov=False, **optim_args)
-            # optimizer = fluid.optimizer.SGD(learning_rate=lr, regularization=regularization)
             optimizer.minimize(mseloss)
 
 
@@ -128,7 +127,6 @@ if __name__ == '__main__':
     conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, w_decay_type='L2Decay', w_decay=0.0005, w_lr=0.3, b_lr=2.0, name='conv02')
     mse01 = MSELoss()
     optimizer2 = Momentum(lr=lr, momentum=0.9, use_nesterov=False)
-    # optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重
     conv01.init_weights(paddle_conv01_weights, None)
     bn01.init_weights(paddle_bn01_scale, paddle_bn01_offset)

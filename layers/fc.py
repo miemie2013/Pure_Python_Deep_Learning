@@ -101,7 +101,7 @@ class FC(Layer):
         if b is not None:
             b = optimizer.update(self.name + '_bias', b, dB, self.b_lr, self.b_decay_type, self.b_decay)
             self.b = b
-        w = optimizer.update(self.name+'_weight', w, dW, self.w_lr, self.w_decay_type, self.w_decay)
+        w = optimizer.update(self.name + '_weight', w, dW, self.w_lr, self.w_decay_type, self.w_decay)
         self.w = w
         return dX
 

@@ -97,9 +97,9 @@ if __name__ == '__main__':
     # 3.损失函数层，没有权重。
 
     #  纯python搭建的神经网络
-    fc01 = FC(3, 8, use_bias=True)
+    fc01 = FC(3, 8, use_bias=True, name='fc01')
     act01 = LeakyReLU(alpha=0.1)
-    fc02 = FC(8, 8, use_bias=True)
+    fc02 = FC(8, 8, use_bias=True, name='fc02')
     act02 = Sigmoid()
     mse01 = MSELoss()
     optimizer2 = SGD(lr=lr)

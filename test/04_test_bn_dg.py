@@ -103,11 +103,11 @@ if __name__ == '__main__':
     # 7.损失函数层，没有权重。
 
     #  纯python搭建的神经网络
-    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=True)
-    bn01 = BatchNorm(8, momentum=0.9, epsilon=1e-05)   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
+    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=True, name='conv01')
+    bn01 = BatchNorm(8, momentum=0.9, epsilon=1e-05, name='bn01')   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
     act01 = LeakyReLU(alpha=0.1)
-    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True)
-    bn02 = BatchNorm(8, momentum=0.9, epsilon=1e-05)   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
+    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, name='conv02')
+    bn02 = BatchNorm(8, momentum=0.9, epsilon=1e-05, name='bn02')   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
     act02 = LeakyReLU(alpha=0.1)
     mse01 = MSELoss()
     optimizer2 = SGD(lr=lr)
