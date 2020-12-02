@@ -134,13 +134,16 @@ class Adam(Optimizer):
         beta1 = self.beta1
         beta2 = self.beta2
         self.t += 1
-        lr = lr / (1.0 - beta1 ** self.t)   # 一开始学习率很大，随着t增大而衰减到 参数的学习率 * 优化器的学习率
+        beta1_pow = beta1 ** (self.t + 0)
+        beta2_pow = beta2 ** (self.t + 0)
+        lr = lr * ((1 - beta2_pow)**0.5) / (1 - beta1_pow)
         moment_1 = self.moments_1[param_name] if param_name in self.moments_1.keys() else np.zeros(dparam.shape)
         moment_2 = self.moments_2[param_name] if param_name in self.moments_2.keys() else np.zeros(dparam.shape)
         if decay_type is None:
             moment_1 = beta1 * moment_1 + (1.0 - beta1) * dparam
             moment_2 = beta2 * moment_2 + (1.0 - beta2) * dparam * dparam
-            param = param - lr * moment_1 / (moment_2 ** 0.5 + self.epsilon)  # 相较于SGD，用moment_1 / (moment_2 ** 0.5 + self.epsilon)代替梯度dparam。
+            param = param - lr * moment_1 / (moment_2 ** 0.5 + self.epsilon * (1 - beta2_pow)**0.5)
+            # param = param - lr * moment_1 / (moment_2 ** 0.5 + self.epsilon)  # 相较于SGD，用moment_1 / (moment_2 ** 0.5 + self.epsilon)代替梯度dparam。
         elif decay_type == 'L2Decay':
             # L2正则化，即在损失函数上加上该参数的平方项：
             # loss_new = loss + 0.5 * decay_coeff * param^2
@@ -151,6 +154,7 @@ class Adam(Optimizer):
             moment_1 = beta1 * moment_1 + (1.0 - beta1) * dparam_new
             moment_2 = beta2 * moment_2 + (1.0 - beta2) * dparam_new * dparam_new
             param = param - lr * moment_1 / (moment_2 ** 0.5 + self.epsilon)
+            print('rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr')
         elif decay_type == 'L1Decay':
             # L1正则化，即在损失函数上加上该参数的绝对值项：
             # loss_new = loss + decay_coeff * |param|
@@ -161,6 +165,7 @@ class Adam(Optimizer):
             moment_1 = beta1 * moment_1 + (1.0 - beta1) * dparam_new
             moment_2 = beta2 * moment_2 + (1.0 - beta2) * dparam_new * dparam_new
             param = param - lr * moment_1 / (moment_2 ** 0.5 + self.epsilon)
+            print('rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr')
         self.moments_1[param_name] = moment_1
         self.moments_2[param_name] = moment_2
         return param

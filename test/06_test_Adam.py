@@ -59,8 +59,8 @@ if __name__ == '__main__':
             act01_out_tensor = fluid.layers.leaky_relu(bn01_out_tensor, alpha=0.1)
 
             conv02_out_tensor = fluid.layers.conv2d(input=act01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1,
-                                                    param_attr=ParamAttr(name="conv02_weights", learning_rate=0.3),
-                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.), learning_rate=2.0))
+                                                    param_attr=ParamAttr(name="conv02_weights", learning_rate=1.0),
+                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.), learning_rate=1.0))
 
 
             # 建立损失函数
@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
             # 优化器
             optim_args = dict(beta1=0.9, beta2=0.999, epsilon=1e-8, lazy_mode=False)
-            regularization = fluid.regularizer.L2Decay(0.0005)
+            regularization = fluid.regularizer.L2Decay(0.000)
             optimizer = fluid.optimizer.Adam(learning_rate=lr, regularization=regularization, **optim_args)
             optimizer.minimize(mseloss)
 
@@ -94,8 +94,8 @@ if __name__ == '__main__':
             act01_out_tensor = fluid.layers.leaky_relu(bn01_out_tensor, alpha=0.1)
 
             conv02_out_tensor = fluid.layers.conv2d(input=act01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1,
-                                                    param_attr=ParamAttr(name="conv02_weights", learning_rate=0.3),
-                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.), learning_rate=2.0))
+                                                    param_attr=ParamAttr(name="conv02_weights", learning_rate=1.0),
+                                                    bias_attr=ParamAttr(name="conv02_bias", regularizer=L2Decay(0.), learning_rate=1.0))
             eval_fetch_list = [bn01_out_tensor, conv02_out_tensor]
     eval_prog = eval_prog.clone(for_test=True)
     # 参数初始化
@@ -121,10 +121,10 @@ if __name__ == '__main__':
 
 
     #  纯python搭建的神经网络
-    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=False, w_decay_type='L2Decay', w_decay=0.0005, name='conv01')
+    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=False, w_decay_type=None, w_decay=0.0005, name='conv01')
     bn01 = BatchNorm(8, momentum=0.9, epsilon=1e-05, name='bn01')   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
     act01 = LeakyReLU(alpha=0.1)
-    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, w_decay_type='L2Decay', w_decay=0.0005, w_lr=0.3, b_lr=2.0, name='conv02')
+    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, w_decay_type=None, w_decay=0.0005, w_lr=1.0, b_lr=1.0, name='conv02')
     mse01 = MSELoss()
     optim_args = dict(beta1=0.9, beta2=0.999, epsilon=1e-8, lazy_mode=False)
     optimizer2 = Adam(lr=lr, beta1=0.9, beta2=0.999, epsilon=1e-8, lazy_mode=False)
