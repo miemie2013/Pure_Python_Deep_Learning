@@ -32,10 +32,9 @@ class SGD(Optimizer):
             # L2正则化，即在损失函数上加上该参数的平方项：
             # loss_new = loss + 0.5 * decay_coeff * param^2
             # loss_new对param求偏导：
-            # dloss_new = dloss + decay_coeff * param    (dloss即本方法的形参dparam)
-            #           = dparam + decay_coeff * param
+            # dparam_new = dparam + decay_coeff * param
             # 所以权重更新公式为
-            # param = param - lr * dloss_new
+            # param = param - lr * dparam_new
             #       = param - lr * (dparam + decay_coeff * param)
             #       = param - lr * dparam - lr * decay_coeff * param
             #       = (1.0 - lr * decay_coeff) * param - lr * dparam
@@ -43,13 +42,12 @@ class SGD(Optimizer):
             keep = (1.0 - lr * decay_coeff)   # keep通常是0.999...这样的值，即param先乘以一个0.999...的值进行衰减再减去lr * dparam。
             param = keep * param - lr * dparam
         elif decay_type == 'L1Decay':
-            # L2正则化，即在损失函数上加上该参数的绝对值项：
+            # L1正则化，即在损失函数上加上该参数的绝对值项：
             # loss_new = loss + decay_coeff * |param|
             # loss_new对param求偏导：
-            # dloss_new = dloss + decay_coeff * sign(param)    (dloss即本方法的形参dparam)
-            #           = dparam + decay_coeff * sign(param)
+            # dparam_new = dparam + decay_coeff * sign(param)
             # 所以权重更新公式为
-            # param = param - lr * dloss_new
+            # param = param - lr * dparam_new
             #       = param - lr * (dparam + decay_coeff * sign(param))
             #       = param - lr * dparam - lr * decay_coeff * sign(param)
             # 推导完成。相当于不使用正则化时param再加上或减去一个极小的正实数lr * decay_coeff。
@@ -76,38 +74,40 @@ class Momentum(Optimizer):
         momentum = self.momentum
         if decay_type is None:
             velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
-            velocity = momentum * velocity + dparam
-            param = param - lr * velocity
+            velocity = momentum * velocity + dparam   # 相较于SGD，用速度velocity代替梯度dparam。当前速度=momentum*历史速度 与 当前梯度 的矢量和。使得优化算法具有“惯性”。
+            if self.use_nesterov:
+                param = param - lr * (dparam + momentum * velocity)
+            else:
+                param = param - lr * velocity
             self.velocities[param_name] = velocity
         elif decay_type == 'L2Decay':
             # L2正则化，即在损失函数上加上该参数的平方项：
             # loss_new = loss + 0.5 * decay_coeff * param^2
             # loss_new对param求偏导：
-            # dloss_new = dloss + decay_coeff * param    (dloss即本方法的形参dparam)
-            #           = dparam + decay_coeff * param
-            # 所以权重更新公式为
-            # param = param - lr * dloss_new
-            #       = param - lr * (dparam + decay_coeff * param)
-            #       = param - lr * dparam - lr * decay_coeff * param
-            #       = (1.0 - lr * decay_coeff) * param - lr * dparam
+            # dparam_new = dparam + decay_coeff * param
             # 推导完成。
             velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
-            dloss_new = dparam + decay_coeff * param
-            velocity = momentum * velocity + dloss_new
-            param = param - lr * velocity
+            dparam_new = dparam + decay_coeff * param
+            velocity = momentum * velocity + dparam_new   # L2正则相较于不用正则，只是将dparam替换成dparam_new。即稍微修改一下dparam。
+            if self.use_nesterov:
+                param = param - lr * (dparam_new + momentum * velocity)
+            else:
+                param = param - lr * velocity
             self.velocities[param_name] = velocity
         elif decay_type == 'L1Decay':
-            # L2正则化，即在损失函数上加上该参数的绝对值项：
+            # L1正则化，即在损失函数上加上该参数的绝对值项：
             # loss_new = loss + decay_coeff * |param|
             # loss_new对param求偏导：
-            # dloss_new = dloss + decay_coeff * sign(param)    (dloss即本方法的形参dparam)
-            #           = dparam + decay_coeff * sign(param)
-            # 所以权重更新公式为
-            # param = param - lr * dloss_new
-            #       = param - lr * (dparam + decay_coeff * sign(param))
-            #       = param - lr * dparam - lr * decay_coeff * sign(param)
-            # 推导完成。相当于不使用正则化时param再加上或减去一个极小的正实数lr * decay_coeff。
-            param = param - lr * dparam - lr * decay_coeff * np.sign(param)
+            # dparam_new = dparam + decay_coeff * sign(param)
+            # 推导完成。
+            velocity = self.velocities[param_name] if param_name in self.velocities.keys() else np.zeros(dparam.shape)
+            dparam_new = dparam + decay_coeff * np.sign(param)
+            velocity = momentum * velocity + dparam_new   # L1正则相较于不用正则，只是将dparam替换成dparam_new。即稍微修改一下dparam。
+            if self.use_nesterov:
+                param = param - lr * (dparam_new + momentum * velocity)
+            else:
+                param = param - lr * velocity
+            self.velocities[param_name] = velocity
         return param
 
 

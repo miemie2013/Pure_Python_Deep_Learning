@@ -72,7 +72,7 @@ if __name__ == '__main__':
             # 优化器
             optim_args = dict(momentum=0.9,)
             regularization = fluid.regularizer.L2Decay(0.0005)
-            optimizer = fluid.optimizer.Momentum(learning_rate=lr, regularization=regularization, **optim_args)
+            optimizer = fluid.optimizer.Momentum(learning_rate=lr, regularization=regularization, use_nesterov=False, **optim_args)
             # optimizer = fluid.optimizer.SGD(learning_rate=lr, regularization=regularization)
             optimizer.minimize(mseloss)
 
