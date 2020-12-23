@@ -38,6 +38,33 @@ class Sigmoid(ActivationLayer):
         return dX
 
 
+class Tanh(ActivationLayer):
+    def __init__(self):
+        super(Tanh, self).__init__()
+
+    def test_forward(self, x):
+        return (np.exp(x) - np.exp(-x)) / (np.exp(x) + np.exp(-x))
+
+    def train_forward(self, x):
+        self.input = np.copy(x)      # 保存一下输入，反向传播时会使用到
+        out = self.test_forward(x)
+        self.output = np.copy(out)   # 保存一下输出，反向传播时会使用到
+        return out
+
+    def train_backward(self, grad, optimizer):
+        '''
+        对本层的输入x求偏导，以更新前面的层的权重。
+        y = tanh(x)
+        dy/dx = (1-tanh^2(x)) = 1 - y^2
+        dloss/dx = dloss/dy * dy/dx = dloss/dy * (1-y^2)
+        '''
+        x, out = self.input, self.output   # 获取训练时前向传播的输入输出
+
+        # loss对输入x的偏导数，用来更新前面的层的权重
+        dX = grad * (1-out*out)   # 形状任意，反正out和grad形状是一样的，支持逐元素相乘
+        return dX
+
+
 class ReLU(ActivationLayer):
     def __init__(self):
         super(ReLU, self).__init__()

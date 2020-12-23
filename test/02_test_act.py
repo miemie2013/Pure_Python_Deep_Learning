@@ -46,7 +46,8 @@ if __name__ == '__main__':
             fc01_out_tensor = fluid.layers.fc(input=inputs, size=8,
                                                     param_attr=ParamAttr(name="fc01_weights"),
                                                     bias_attr=ParamAttr(name="fc01_bias"))
-            act01_out_tensor = fluid.layers.leaky_relu(fc01_out_tensor, alpha=0.1)
+            # act01_out_tensor = fluid.layers.leaky_relu(fc01_out_tensor, alpha=0.1)
+            act01_out_tensor = fluid.layers.tanh(fc01_out_tensor)
             fc02_out_tensor = fluid.layers.fc(input=act01_out_tensor, size=8,
                                                     param_attr=ParamAttr(name="fc02_weights"),
                                                     bias_attr=ParamAttr(name="fc02_bias"))
@@ -72,7 +73,8 @@ if __name__ == '__main__':
             fc01_out_tensor = fluid.layers.fc(input=inputs, size=8,
                                                     param_attr=ParamAttr(name="fc01_weights"),
                                                     bias_attr=ParamAttr(name="fc01_bias"))
-            act01_out_tensor = fluid.layers.leaky_relu(fc01_out_tensor, alpha=0.1)
+            # act01_out_tensor = fluid.layers.leaky_relu(fc01_out_tensor, alpha=0.1)
+            act01_out_tensor = fluid.layers.tanh(fc01_out_tensor)
             fc02_out_tensor = fluid.layers.fc(input=act01_out_tensor, size=8,
                                                     param_attr=ParamAttr(name="fc02_weights"),
                                                     bias_attr=ParamAttr(name="fc02_bias"))
@@ -98,7 +100,8 @@ if __name__ == '__main__':
 
     #  纯python搭建的神经网络
     fc01 = FC(3, 8, use_bias=True, name='fc01')
-    act01 = LeakyReLU(alpha=0.1)
+    # act01 = LeakyReLU(alpha=0.1)
+    act01 = Tanh()
     fc02 = FC(8, 8, use_bias=True, name='fc02')
     act02 = Sigmoid()
     mse01 = MSELoss()
