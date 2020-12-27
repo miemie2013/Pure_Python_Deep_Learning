@@ -159,6 +159,10 @@ class Conv2D(Layer):
         if b is not None:
             dB = np.sum(grad, axis=(0, 2, 3))  # 中文记法：等于loss对本层输出的梯度 对NHW维求和。
 
+        # 超强口诀:
+        # dloss/dW = dy*像素块， 再对齐求和。
+        # dloss/dX = dy*W，     再错位求和。
+
         # loss对W的偏导数。比较复杂，和前向传播时一样，再进行一次卷积核滑动。
         dW = np.zeros(w.shape, np.float32)   # [out_C, in_C, kH, kW]
         # loss对pad_x的偏导数
@@ -176,12 +180,14 @@ class Conv2D(Layer):
                 dy = grad[:, :, i:i+1, j:j+1]  # [N, out_C, 1, 1]  固定前2维为特定下标，就是课件里的标量dloss/dy_nkij了！
                 dy = np.expand_dims(dy, 2)   # 增加1维，[N, out_C, 1, 1, 1]。
 
-                # 中文记法：dy乘以当前卷积核覆盖的像素块，再累加，就是loss对W的偏导数了。过了面试的话不用谢我。
+
+
+                # dloss/dW = dy*像素块， 再对齐求和。
                 temp = dy * exp_part_x   # [N, out_C, in_C, kH, kW]
                 temp = np.sum(temp, axis=(0, ))  # [out_C, in_C, kH, kW]  多个样本共享了权重W，所以求和
-                dW += temp      # “多个样本”共享了权重W，所以求和。现在，你是不是觉得我很聪明？哈哈
+                dW += temp      # “多个样本”共享了权重W，所以求和。
 
-                # loss对输入x的偏导数
+                # dloss/dX = dy*W，     再错位求和。
                 exp_W = np.expand_dims(w, 0)         # [1, out_C, in_C, kH, kW]
                 temp = dy * exp_W                    # [N, out_C, in_C, kH, kW]
                 temp = np.sum(temp, axis=(1, ))      # [N, in_C, kH, kW]  全连接层中，是把偏移数量那一维求和掉，卷积层里也是一样，把偏移数量那一维求和掉。
@@ -316,6 +322,12 @@ class Conv2D(Layer):
         w_t = np.reshape(w_t, (in_C*kH*kW, out_C, 1, 1))   # [in_C*kH*kW, out_C, 1, 1]
         dx = F_conv2d(grad, w_t, b=None, stride=1, padding=0)   # [N, in_C*kH*kW, out_H, out_W]
         dx = np.reshape(dx, (-1, in_C, kH, kW, out_H, out_W))   # [N, in_C, kH, kW, out_H, out_W]
+
+
+        # 超强口诀:
+        # dloss/dW = dy*像素块， 再对齐求和。
+        # dloss/dX = dy*W，     再错位求和。
+
 
         # loss对pad_x的偏导数
         dpad_x = np.zeros((N, C, H + padding*2, W + padding*2), np.float32)   # [N, C, H + padding*2, W + padding*2]

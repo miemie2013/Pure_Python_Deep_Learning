@@ -168,8 +168,8 @@ class BatchNorm(Layer):
 
         # loss对Bias的偏导数
         dBias = np.sum(grad, axis=(0, ))  # 中文记法：等于loss对本层输出的梯度 对NHW维求和。
-        # loss对Scale的偏导数。这玩意就是bn层里loss对Scale的偏导数了，熟记。过了面试的话不用谢我。
-        dScale = grad * (x-self.cur_tile_exp_mean) / ((self.cur_tile_exp_var + epsilon)**0.5)  # 中文记法：等于loss对本层输出的梯度 乘以 本层输入归一化后的值（用的是这一批的均值和方差进行归一化），再对NHW维求和。
+        # loss对Scale的偏导数。很简单，就是dScale = grad * normX
+        dScale = grad * (x-self.cur_tile_exp_mean) / ((self.cur_tile_exp_var + epsilon)**0.5)
         dScale = np.sum(dScale, axis=(0, ))
 
 
