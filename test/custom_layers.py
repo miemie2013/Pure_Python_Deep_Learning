@@ -8,6 +8,7 @@
 #
 # ================================================================
 import paddle
+import numpy as np
 import paddle.fluid as fluid
 import paddle.fluid.layers as L
 import paddle.nn.functional as F
@@ -135,6 +136,78 @@ def get_norm(norm_type):
 
 
 
+class MyBN(paddle.nn.Layer):
+    def __init__(self,
+                 num_features,
+                 momentum=0.9,
+                 epsilon=1e-05,
+                 weight_attr=None,
+                 bias_attr=None,
+                 data_format='NCHW',
+                 name=None):
+        super(MyBN, self).__init__()
+        self.num_features = num_features
+        self.momentum = momentum
+        self.epsilon = epsilon
+        self.data_format = data_format
+        self.name = name
+
+        self.weight = fluid.layers.create_parameter(
+            shape=[num_features, ],
+            dtype='float32',
+            attr=weight_attr,
+            default_initializer=fluid.initializer.Constant(1.0))
+        self.bias = fluid.layers.create_parameter(
+            shape=[num_features, ],
+            dtype='float32',
+            attr=bias_attr,
+            default_initializer=fluid.initializer.Constant(0.0))
+
+        moving_mean_name = None
+        moving_variance_name = None
+
+        if name is not None:
+            moving_mean_name = name + "_mean"
+            moving_variance_name = name + "_variance"
+
+        mattr = ParamAttr(
+            name=moving_mean_name,
+            initializer=fluid.initializer.Constant(0.0),
+            trainable=False)
+        vattr = ParamAttr(
+            name=moving_variance_name,
+            initializer=fluid.initializer.Constant(1.0),
+            trainable=False)
+        self._mean = fluid.layers.create_parameter(shape=[num_features, ], dtype='float32', attr=mattr)
+        self._variance = fluid.layers.create_parameter(shape=[num_features, ], dtype='float32', attr=vattr)
+
+    def forward(self, x):
+        if self.training:
+            U = fluid.layers.reduce_mean(x, dim=[0, 2, 3], keep_dim=True)  # [1, C, 1, 1]
+            V = fluid.layers.reduce_mean(fluid.layers.square(x - U), dim=[0, 2, 3], keep_dim=True)  # [1, C, 1, 1]
+            normX = (x - U) / L.sqrt(V + self.epsilon)  # [N, C, H, W]
+            scale = L.unsqueeze(self.weight, [0, 2, 3])
+            bias = L.unsqueeze(self.bias, [0, 2, 3])
+            out = normX * scale + bias
+
+            curr_U = np.reshape(U.numpy(), [self.num_features, ])
+            curr_V = np.reshape(V.numpy(), [self.num_features, ])
+            state_dict = self.state_dict()
+            momentum = self.momentum
+            _mean = self._mean.numpy() * momentum + curr_U * (1. - momentum)
+            _variance = self._variance.numpy() * momentum + curr_V * (1. - momentum)
+            state_dict['_mean'] = _mean.astype(np.float32)
+            state_dict['_variance'] = _variance.astype(np.float32)
+            self.set_state_dict(state_dict)
+        else:
+            U = L.unsqueeze(self._mean, [0, 2, 3])  # [1, C, 1, 1]
+            V = L.unsqueeze(self._variance, [0, 2, 3])  # [1, C, 1, 1]
+            normX = (x - U) / L.sqrt(V + self.epsilon)  # [N, C, H, W]
+            scale = L.unsqueeze(self.weight, [0, 2, 3])
+            bias = L.unsqueeze(self.bias, [0, 2, 3])
+            out = normX * scale + bias
+        return out
+
 
 class Conv2dUnit(paddle.nn.Layer):
     def __init__(self,
@@ -233,7 +306,8 @@ class Conv2dUnit(paddle.nn.Layer):
         self.gn = None
         self.af = None
         if bn:
-            self.bn = paddle.nn.BatchNorm2D(filters, weight_attr=pattr, bias_attr=battr)
+            # self.bn = paddle.nn.BatchNorm2D(filters, weight_attr=pattr, bias_attr=battr)
+            self.bn = MyBN(filters, weight_attr=pattr, bias_attr=battr)
         if gn:
             self.gn = paddle.nn.GroupNorm(num_groups=groups, num_channels=filters, weight_attr=pattr, bias_attr=battr)
         if af:
