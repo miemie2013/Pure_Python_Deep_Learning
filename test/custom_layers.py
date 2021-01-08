@@ -124,6 +124,7 @@ def get_norm(norm_type):
     bn = 0
     gn = 0
     af = 0
+    cbn = 0
     if norm_type == 'bn':
         bn = 1
     elif norm_type == 'sync_bn':
@@ -132,7 +133,9 @@ def get_norm(norm_type):
         gn = 1
     elif norm_type == 'affine_channel':
         af = 1
-    return bn, gn, af
+    elif norm_type == 'cbn':
+        cbn = 1
+    return bn, gn, af, cbn
 
 
 
@@ -209,6 +212,201 @@ class MyBN(paddle.nn.Layer):
         return out
 
 
+class CBatchNorm2D(paddle.nn.Layer):
+    def __init__(self, num_features, weight_attr, bias_attr, eps=1e-5, momentum=0.9, affine=True,
+                 track_running_stats=True,
+                 buffer_num=0, rho=1.0,
+                 burnin=0, two_stage=True,
+                 FROZEN=False, out_p=False, name=None):
+        super(CBatchNorm2D, self).__init__()
+        self.num_features = num_features
+        self.eps = eps
+        self.momentum = momentum
+        self.affine = affine
+        self.track_running_stats = track_running_stats
+
+        self.buffer_num = buffer_num
+        self.max_buffer_num = buffer_num
+        self.rho = rho
+        self.burnin = burnin
+        self.two_stage = two_stage
+        self.FROZEN = FROZEN
+        self.out_p = out_p
+
+        self.iter_count = 0
+        self.pre_mu = []
+        self.pre_meanx2 = []  # mean(x^2)
+        self.pre_dmudw = []
+        self.pre_dmeanx2dw = []
+        self.pre_weight = []
+
+        self.weight = fluid.layers.create_parameter(
+            shape=[num_features, ],
+            dtype='float32',
+            attr=weight_attr,
+            default_initializer=fluid.initializer.Constant(1.0))
+        self.bias = fluid.layers.create_parameter(
+            shape=[num_features, ],
+            dtype='float32',
+            attr=bias_attr,
+            default_initializer=fluid.initializer.Constant(0.0))
+
+        if not self.affine:
+            self.weight.stop_gradient = True
+            self.bias.stop_gradient = True
+
+        moving_mean_name = None
+        moving_variance_name = None
+
+        if name is not None:
+            moving_mean_name = name + "_mean"
+            moving_variance_name = name + "_variance"
+
+        mattr = ParamAttr(
+            name=moving_mean_name,
+            initializer=fluid.initializer.Constant(0.0),
+            trainable=False)
+        vattr = ParamAttr(
+            name=moving_variance_name,
+            initializer=fluid.initializer.Constant(1.0),
+            trainable=False)
+        self._mean = fluid.layers.create_parameter(shape=[num_features, ], dtype='float32', attr=mattr)
+        self._variance = fluid.layers.create_parameter(shape=[num_features, ], dtype='float32', attr=vattr)
+
+    def _check_input_dim(self, input):
+        if input.dim() != 4:
+            raise ValueError('expected 4D input (got {}D input)'
+                             .format(input.dim()))
+
+    def _update_buffer_num(self):
+        if self.two_stage:
+            if self.iter_count > self.burnin:
+                self.buffer_num = self.max_buffer_num
+            else:
+                self.buffer_num = 0
+        else:
+            self.buffer_num = int(self.max_buffer_num * min(self.iter_count / self.burnin, 1.0))
+
+    def forward(self, input, weight):
+        # deal with wight and grad of self.pre_dxdw!
+        self._check_input_dim(input)
+        y = L.transpose(input, [1, 0, 2, 3])   # [C, N, H, W]
+        return_shape = y.shape                 # [C, N, H, W]
+        C, N, H, W = return_shape
+        NHW = N*H*W
+        y = L.reshape(y, (return_shape[0], -1))   # [C, N*H*W]
+
+        # burnin
+        if self.training and self.burnin > 0:
+            self.iter_count += 1
+            self._update_buffer_num()
+
+        if self.buffer_num > 0 and self.training and (not input.stop_gradient):  # some layers are frozen!
+            # cal current batch mu and sigma
+            _cur_mu = L.reduce_mean(y, dim=[1, ], keep_dim=True)  # [C, 1]
+            _cur_sigma2 = L.reduce_sum(L.square(y - _cur_mu), dim=[1, ], keep_dim=True) / (NHW-1)  # [C, 1]  作者原版实现中使用的是样本方差，所以分母-1
+            cur_mu = L.reshape(_cur_mu, (-1, ))  # [C, ]
+            cur_sigma2 = L.reshape(_cur_sigma2, (-1, ))  # [C, ]
+            y2 = L.square(y)
+            cur_meanx2 = L.reduce_mean(y2, dim=[1, ], keep_dim=False)  # [C, ]
+            # cal dmu/dw dsigma2/dw
+            dmudw = paddle.grad(outputs=[cur_mu], inputs=[weight], create_graph=False, retain_graph=True)[0]
+            dmeanx2dw = paddle.grad(outputs=[cur_meanx2], inputs=[weight], create_graph=False, retain_graph=True)[0]
+
+            # update cur_mu and cur_sigma2 with pres
+            weight_data = weight.numpy()
+            weight_data = paddle.to_tensor(weight_data)
+            weight_data.stop_gradient = True
+            # 如果用L.stack()会报错，所以用L.concat()代替。
+            mu_all = [cur_mu, ] + [tmp_mu + L.reduce_sum(self.rho * tmp_d * (weight_data - tmp_w), dim=[1, 2, 3]) for
+                                   tmp_mu, tmp_d, tmp_w in zip(self.pre_mu, self.pre_dmudw, self.pre_weight)]
+            meanx2_all = [cur_meanx2, ] + [tmp_meanx2 + L.reduce_sum(self.rho * tmp_d * (weight_data - tmp_w), dim=[1, 2, 3]) for
+                                           tmp_meanx2, tmp_d, tmp_w in zip(self.pre_meanx2, self.pre_dmeanx2dw, self.pre_weight)]
+            mu_all = [L.unsqueeze(mu_, 0) for mu_ in mu_all]
+            meanx2_all = [L.unsqueeze(meanx2_, 0) for meanx2_ in meanx2_all]
+            mu_all = L.concat(mu_all, 0)
+            meanx2_all = L.concat(meanx2_all, 0)
+
+            sigma2_all = meanx2_all - L.square(mu_all)
+
+            # with considering count
+            re_mu_all = mu_all.clone()
+            re_meanx2_all = meanx2_all.clone()
+            mask1 = L.cast(sigma2_all >= 0., dtype="float32")
+            mask1.stop_gradient = True
+            re_mu_all *= mask1
+            re_meanx2_all *= mask1
+            count = L.reduce_sum(L.cast(sigma2_all >= 0., dtype="float32"), dim=[0, ])
+            mu = L.reduce_sum(re_mu_all, dim=[0, ]) / count
+            sigma2 = L.reduce_sum(re_meanx2_all, dim=[0, ]) / count - L.square(mu)
+
+
+            cur_mu_ = cur_mu.numpy()
+            cur_mu_ = paddle.to_tensor(cur_mu_)
+            cur_mu_.stop_gradient = True
+            self.pre_mu = [cur_mu_, ] + self.pre_mu[:(self.buffer_num - 1)]
+            cur_meanx2_ = cur_meanx2.numpy()
+            cur_meanx2_ = paddle.to_tensor(cur_meanx2_)
+            cur_meanx2_.stop_gradient = True
+            self.pre_meanx2 = [cur_meanx2_, ] + self.pre_meanx2[:(self.buffer_num - 1)]
+            dmudw_ = dmudw.numpy()
+            dmudw_ = paddle.to_tensor(dmudw_)
+            dmudw_.stop_gradient = True
+            self.pre_dmudw = [dmudw_, ] + self.pre_dmudw[:(self.buffer_num - 1)]
+            dmeanx2dw_ = dmeanx2dw.numpy()
+            dmeanx2dw_ = paddle.to_tensor(dmeanx2dw_)
+            dmeanx2dw_.stop_gradient = True
+            self.pre_dmeanx2dw = [dmeanx2dw_, ] + self.pre_dmeanx2dw[:(self.buffer_num - 1)]
+
+            tmp_weight = weight.numpy()
+            tmp_weight = paddle.to_tensor(tmp_weight)
+            tmp_weight.stop_gradient = True
+            self.pre_weight = [tmp_weight, ] + self.pre_weight[:(self.buffer_num - 1)]
+
+        else:
+            x = y   # [C, N*H*W]
+            mu = L.reduce_mean(x, dim=[1, ], keep_dim=True)  # [C, 1]
+            sigma2 = L.reduce_sum(L.square(x - mu), dim=[1, ], keep_dim=True) / (NHW-1)  # [C, 1]  作者原版实现中使用的是样本方差，所以分母-1
+            mu = L.reshape(mu, (-1, ))  # [C, ]
+            sigma2 = L.reshape(sigma2, (-1, ))  # [C, ]
+            cur_mu = mu
+            cur_sigma2 = sigma2
+
+        if not self.training or self.FROZEN:
+            y = y - L.reshape(self._mean, (-1, 1))
+            # TODO: outside **0.5?
+            if self.out_p:
+                y = y / (L.reshape(self._variance, (-1, 1)) + self.eps) ** .5
+            else:
+                y = y / (L.reshape(self._variance, (-1, 1)) ** .5 + self.eps)
+
+        else:
+            if self.track_running_stats is True:
+                state_dict = self.state_dict()
+                momentum = self.momentum
+                _mean = self._mean.numpy() * momentum + cur_mu.numpy() * (1. - momentum)
+                _variance = self._variance.numpy() * momentum + cur_sigma2.numpy() * (1. - momentum)
+                state_dict['_mean'] = _mean.astype(np.float32)
+                state_dict['_variance'] = _variance.astype(np.float32)
+                self.set_state_dict(state_dict)
+            y = y - L.reshape(mu, (-1, 1))   # [C, N*H*W]
+            # TODO: outside **0.5?
+            if self.out_p:
+                y = y / (L.reshape(sigma2, (-1, 1)) + self.eps) ** .5
+            else:
+                y = y / (L.reshape(sigma2, (-1, 1)) ** .5 + self.eps)
+
+        y = L.reshape(self.weight, (-1, 1)) * y + L.reshape(self.bias, (-1, 1))
+        y = L.reshape(y, return_shape)
+        y = L.transpose(y, [1, 0, 2, 3])   # [N, C, H, W]
+        return y
+
+
+
+
+
+
+
 class Conv2dUnit(paddle.nn.Layer):
     def __init__(self,
                  input_dim,
@@ -277,8 +475,8 @@ class Conv2dUnit(paddle.nn.Layer):
 
 
         # norm
-        assert norm_type in [None, 'bn', 'sync_bn', 'gn', 'affine_channel']
-        bn, gn, af = get_norm(norm_type)
+        assert norm_type in [None, 'cbn', 'bn', 'sync_bn', 'gn', 'affine_channel']
+        bn, gn, af, cbn = get_norm(norm_type)
         if conv_name == "conv1":
             norm_name = "bn_" + conv_name
             if gn:
@@ -305,6 +503,7 @@ class Conv2dUnit(paddle.nn.Layer):
         self.bn = None
         self.gn = None
         self.af = None
+        self.cbn = None
         if bn:
             self.bn = paddle.nn.BatchNorm2D(filters, weight_attr=pattr, bias_attr=battr)
             # self.bn = MyBN(filters, weight_attr=pattr, bias_attr=battr)
@@ -322,6 +521,8 @@ class Conv2dUnit(paddle.nn.Layer):
                 dtype='float32',
                 attr=battr,
                 default_initializer=Constant(0.))
+        if cbn:
+            self.cbn = CBatchNorm2D(filters, weight_attr=pattr, bias_attr=battr, buffer_num=3, burnin=8, out_p=True)
 
         # act
         self.act = None
@@ -373,6 +574,11 @@ class Conv2dUnit(paddle.nn.Layer):
             norm_out = self.gn(conv_out)
         elif self.af:
             norm_out = fluid.layers.affine_channel(conv_out, scale=self.scale, bias=self.offset, act=None)
+        elif self.cbn:
+            if self.use_dcn:
+                norm_out = self.cbn(conv_out, self.dcn_param)
+            else:
+                norm_out = self.cbn(conv_out, self.conv.weight)
         else:
             norm_out = conv_out
         if self.act:
