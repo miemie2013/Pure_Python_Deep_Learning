@@ -34,6 +34,8 @@ from layers.optimizer import *
 from test.custom_layers import *
 
 import paddle
+import torch
+import test.custom_layers2 as cl2
 
 
 class PaddleNet(paddle.nn.Layer):
@@ -42,6 +44,23 @@ class PaddleNet(paddle.nn.Layer):
         self.name = name
         self.conv1 = Conv2dUnit(3, 8, 1, stride=1, bias_attr=True, norm_type=norm_type, freeze_norm=False, norm_decay=0.0, act='leaky', name='conv01')
         self.conv2 = Conv2dUnit(8, 8, 3, stride=1, bias_attr=True, norm_type=norm_type, freeze_norm=False, norm_decay=0.0, act='leaky', name='conv02')
+
+        # freeze
+        # self.conv1.freeze()
+        # self.conv2.freeze()
+
+    def __call__(self, input_tensor):
+        conv01_out, norm01_out, act01_out = self.conv1(input_tensor)
+        conv02_out, norm02_out, act02_out = self.conv2(act01_out)
+        return conv01_out, norm01_out, act01_out, conv02_out, norm02_out, act02_out
+
+
+class PytorchNet(torch.nn.Module):
+    def __init__(self, norm_type='bn', name=''):
+        super(PytorchNet, self).__init__()
+        self.name = name
+        self.conv1 = cl2.Conv2dUnit(3, 8, 1, stride=1, bias_attr=True, norm_type=norm_type, freeze_norm=False, norm_decay=0.0, act='leaky', name='conv01')
+        self.conv2 = cl2.Conv2dUnit(8, 8, 3, stride=1, bias_attr=True, norm_type=norm_type, freeze_norm=False, norm_decay=0.0, act='leaky', name='conv02')
 
         # freeze
         # self.conv1.freeze()
@@ -79,7 +98,7 @@ if __name__ == '__main__':
     param_state_dict = model.state_dict()
 
 
-    # 纯python搭建的神经网络的权重。初始值是paddle相同层的初始值。为了模拟paddle训练过程。
+    # Pytorch搭建的神经网络的权重。初始值是paddle相同层的初始值。为了模拟paddle训练过程。
     # 1.卷积层
     paddle_conv01_weights = param_state_dict['conv1.conv.weight'].numpy()
     paddle_conv01_bias = param_state_dict['conv1.conv.bias'].numpy()
@@ -100,22 +119,23 @@ if __name__ == '__main__':
     # 6.激活层
     # 7.损失函数层，没有权重。
 
-    #  纯python搭建的神经网络
-    conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=True, name='conv01')
-    bn01 = BatchNorm(8, momentum=0.9, epsilon=1e-05, name='bn01')   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
-    act01 = LeakyReLU(alpha=0.1)
-    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, name='conv02')
-    bn02 = BatchNorm(8, momentum=0.9, epsilon=1e-05, name='bn02')   # 我们跟随paddle的bn层，使用了相同的momentum值和epsilon值
-    act02 = LeakyReLU(alpha=0.1)
-    mse01 = MSELoss()
-    optimizer2 = SGD(lr=lr)
+    #  Pytorch搭建的神经网络
+    model2 = PytorchNet()
+    model2.train()
+    optimizer2 = torch.optim.SGD(model2.parameters(), lr=lr)
     # 初始化自己网络的权重
-    conv01.init_weights(paddle_conv01_weights, paddle_conv01_bias)
-    bn01.init_weights(paddle_bn01_scale, paddle_bn01_offset)
-    bn01.init_means_vars(paddle_bn01_mean, paddle_bn01_variance)
-    conv02.init_weights(paddle_conv02_weights, paddle_conv02_bias)
-    bn02.init_weights(paddle_bn02_scale, paddle_bn02_offset)
-    bn02.init_means_vars(paddle_bn02_mean, paddle_bn02_variance)
+    model2.conv1.conv.weight.data = torch.Tensor(paddle_conv01_weights)
+    model2.conv1.conv.bias.data = torch.Tensor(paddle_conv01_bias)
+    model2.conv1.bn.weight.data = torch.Tensor(paddle_bn01_scale)
+    model2.conv1.bn.bias.data = torch.Tensor(paddle_bn01_offset)
+    model2.conv1.bn.running_mean.data = torch.Tensor(paddle_bn01_mean)
+    model2.conv1.bn.running_var.data = torch.Tensor(paddle_bn01_variance)
+    model2.conv2.conv.weight.data = torch.Tensor(paddle_conv02_weights)
+    model2.conv2.conv.bias.data = torch.Tensor(paddle_conv02_bias)
+    model2.conv2.bn.weight.data = torch.Tensor(paddle_bn02_scale)
+    model2.conv2.bn.bias.data = torch.Tensor(paddle_bn02_offset)
+    model2.conv2.bn.running_mean.data = torch.Tensor(paddle_bn02_mean)
+    model2.conv2.bn.running_var.data = torch.Tensor(paddle_bn02_variance)
 
 
     # 只训练8步
@@ -147,13 +167,20 @@ if __name__ == '__main__':
 
         print('train_forward:')
         # python代码模拟训练过程，与paddle的输出校验。我们希望和飞桨有相同的输出。
-        my_conv01_out = conv01.train_forward(batch_data)
-        my_bn01_out = bn01.train_forward(my_conv01_out)
-        my_act01_out = act01.train_forward(my_bn01_out)
-        my_conv02_out = conv02.train_forward(my_act01_out)
-        my_bn02_out = bn02.train_forward(my_conv02_out)
-        my_act02_out = act02.train_forward(my_bn02_out)
-        my_mseloss_out = mse01.train_forward(my_act02_out, y_true_arr)
+        batch_data3 = torch.Tensor(batch_data)
+        y_true_arr3 = torch.Tensor(y_true_arr)
+        my_conv01_out, my_bn01_out, my_act01_out, my_conv02_out, my_bn02_out, my_act02_out = model2(batch_data3)
+        mseloss2 = torch.pow(y_true_arr3 - my_act02_out, 2)
+        mseloss2 = mseloss2.mean()
+
+        my_mseloss_out = mseloss2.cpu().detach().numpy()
+        my_bn01_out = my_bn01_out.cpu().detach().numpy()
+        my_bn02_out = my_bn02_out.cpu().detach().numpy()
+
+        # 更新权重
+        mseloss2.backward()
+        optimizer2.step()
+        optimizer2.zero_grad()
 
 
         diff_bn01_out = np.sum((paddle_bn01_out - my_bn01_out)**2)
@@ -164,14 +191,6 @@ if __name__ == '__main__':
         print('diff_mseloss_out=%.6f' % diff_mseloss_out)   # 若是0，则表示成功模拟出PaddlePaddle bn层的输出结果
 
         print('\ntrain_backward:')
-        # 纯python搭建的神经网络进行反向传播啦！求偏导数即可。反向传播会更新权重，我们期望和飞桨有相同的权重。
-        my_act02_out_grad = mse01.train_backward(optimizer2)
-        my_bn02_out_grad = act02.train_backward(my_act02_out_grad, optimizer2)
-        my_conv02_out_grad = bn02.train_backward(my_bn02_out_grad, optimizer2)
-        my_act01_out_grad = conv02.train_backward(my_conv02_out_grad, optimizer2)
-        my_bn01_out_grad = act01.train_backward(my_act01_out_grad, optimizer2)
-        my_conv01_out_grad = bn01.train_backward(my_bn01_out_grad, optimizer2)
-        inputs_grad = conv01.train_backward(my_conv01_out_grad, optimizer2)
 
         # 和飞桨更新后的权重校验。
         paddle_bn01_scale = param_state_dict['conv1.bn.weight'].numpy()
@@ -184,23 +203,23 @@ if __name__ == '__main__':
         paddle_bn02_variance = param_state_dict['conv2.bn._variance'].numpy()
 
 
-        diff_bn02_scale = np.sum((paddle_bn02_scale - bn02.scale)**2)
+        diff_bn02_scale = np.sum((paddle_bn02_scale - model2.conv2.bn.weight.cpu().detach().numpy())**2)
         print('diff_bn02_scale=%.6f' % diff_bn02_scale)   # 若是0，则表示成功模拟出权重更新
-        diff_bn02_offset = np.sum((paddle_bn02_offset - bn02.offset)**2)
+        diff_bn02_offset = np.sum((paddle_bn02_offset - model2.conv2.bn.bias.cpu().detach().numpy())**2)
         print('diff_bn02_offset=%.6f' % diff_bn02_offset)   # 若是0，则表示成功模拟出权重更新
-        diff_bn01_scale = np.sum((paddle_bn01_scale - bn01.scale)**2)
+        diff_bn01_scale = np.sum((paddle_bn01_scale - model2.conv1.bn.weight.cpu().detach().numpy())**2)
         print('diff_bn01_scale=%.6f' % diff_bn01_scale)   # 若是0，则表示成功模拟出权重更新
-        diff_bn01_offset = np.sum((paddle_bn01_offset - bn01.offset)**2)
+        diff_bn01_offset = np.sum((paddle_bn01_offset - model2.conv1.bn.bias.cpu().detach().numpy())**2)
         print('diff_bn01_offset=%.6f' % diff_bn01_offset)   # 若是0，则表示成功模拟出权重更新
 
         # 均值和方差，在train_forward()阶段就已经被更新
-        diff_bn02_mean = np.sum((paddle_bn02_mean - bn02.mean)**2)
+        diff_bn02_mean = np.sum((paddle_bn02_mean - model2.conv2.bn.running_mean.cpu().detach().numpy())**2)
         print('diff_bn02_mean=%.6f' % diff_bn02_mean)   # 若是0，则表示成功模拟出均值更新
-        diff_bn02_variance = np.sum((paddle_bn02_variance - bn02.var)**2)
+        diff_bn02_variance = np.sum((paddle_bn02_variance - model2.conv2.bn.running_var.cpu().detach().numpy())**2)
         print('diff_bn02_variance=%.6f' % diff_bn02_variance)   # 若是0，则表示成功模拟出方差更新
-        diff_bn01_mean = np.sum((paddle_bn01_mean - bn01.mean)**2)
+        diff_bn01_mean = np.sum((paddle_bn01_mean - model2.conv1.bn.running_mean.cpu().detach().numpy())**2)
         print('diff_bn01_mean=%.6f' % diff_bn01_mean)   # 若是0，则表示成功模拟出均值更新
-        diff_bn01_variance = np.sum((paddle_bn01_variance - bn01.var)**2)
+        diff_bn01_variance = np.sum((paddle_bn01_variance - model2.conv1.bn.running_var.cpu().detach().numpy())**2)
         print('diff_bn01_variance=%.6f' % diff_bn01_variance)   # 若是0，则表示成功模拟出方差更新
 
         # ==================== test ====================
@@ -213,12 +232,12 @@ if __name__ == '__main__':
         model.train()
         # 自己网络的test
         print('\ntest_forward:')
-        my_test_conv01_out = conv01.test_forward(test_data)
-        my_test_bn01_out = bn01.test_forward(my_test_conv01_out)
-        my_test_act01_out = act01.test_forward(my_test_bn01_out)
-        my_test_conv02_out = conv02.test_forward(my_test_act01_out)
-        my_test_bn02_out = bn02.test_forward(my_test_conv02_out)
-        my_test_act02_out = act02.test_forward(my_test_bn02_out)
+        model2.eval()
+        test_data3 = torch.Tensor(test_data)
+        my_conv01_out, my_bn01_out, my_act01_out, my_conv02_out, my_bn02_out, my_act02_out = model2(test_data3)
+        my_test_bn01_out = my_bn01_out.cpu().detach().numpy()
+        my_test_bn02_out = my_bn02_out.cpu().detach().numpy()
+        model2.train()
         diff_test_bn01_out = np.sum((paddle_test_bn01_out - my_test_bn01_out)**2)
         print('diff_test_bn01_out=%.6f' % diff_test_bn01_out)   # 若是0，则表示成功模拟出推理
         diff_test_bn02_out = np.sum((paddle_test_bn02_out - my_test_bn02_out)**2)
