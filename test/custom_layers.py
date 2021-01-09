@@ -183,18 +183,42 @@ class MyBN(paddle.nn.Layer):
             trainable=False)
         self._mean = fluid.layers.create_parameter(shape=[num_features, ], dtype='float32', attr=mattr)
         self._variance = fluid.layers.create_parameter(shape=[num_features, ], dtype='float32', attr=vattr)
+        self.A = None
+        self.B = None
+        self.special_kernel = None
 
     def forward(self, x):
         if self.training:
-            U = fluid.layers.reduce_mean(x, dim=[0, 2, 3], keep_dim=True)  # [1, C, 1, 1]
-            V = fluid.layers.reduce_mean(fluid.layers.square(x - U), dim=[0, 2, 3], keep_dim=True)  # [1, C, 1, 1]
-            normX = (x - U) / L.sqrt(V + self.epsilon)  # [N, C, H, W]
-            scale = L.unsqueeze(self.weight, [0, 2, 3])
-            bias = L.unsqueeze(self.bias, [0, 2, 3])
-            out = normX * scale + bias
+            N, C, H, W = x.shape
+            NHW = N*H*W
 
-            curr_U = np.reshape(U.numpy(), [self.num_features, ])
-            curr_V = np.reshape(V.numpy(), [self.num_features, ])
+            # 方案一：用乘法
+            # U = fluid.layers.reduce_mean(x, dim=[0, 2, 3], keep_dim=True)  # [1, C, 1, 1]
+            # V = fluid.layers.reduce_mean(fluid.layers.square(x - U), dim=[0, 2, 3], keep_dim=True)  # [1, C, 1, 1]
+            # normX = (x - U) / L.sqrt(V + self.epsilon)  # [N, C, H, W]
+            # scale = L.unsqueeze(self.weight, [0, 2, 3])
+            # bias = L.unsqueeze(self.bias, [0, 2, 3])
+            # out = normX * scale + bias
+            # U = L.reshape(U, (-1, ))
+            # V = L.reshape(V, (-1, ))
+
+            # 方案二：用分组卷积代替乘法
+            # out = W*(x - U)/s + B     = (W/s) * x + B - (W/s)*U
+            U = fluid.layers.reduce_mean(x, dim=[0, 2, 3], keep_dim=False)  # [C, ]
+            if self.special_kernel is None:  # 为了快速求(x - U)
+                special_kernel = np.ones((self.num_features, 1, 1, 1), np.float32)
+                self.special_kernel = paddle.to_tensor(special_kernel)
+                self.special_kernel.stop_gradient = True
+            V = F.conv2d(x, self.special_kernel, -U, groups=self.num_features)  # 为了快速求(x - U)
+            V = fluid.layers.reduce_mean(fluid.layers.square(V), dim=[0, 2, 3], keep_dim=False)  # [C, ]
+            std = L.sqrt(V + self.epsilon)  # [C, ]
+            A = self.weight / std  # [C, ]
+            B = self.bias - U * A  # [C, ]
+            A = L.unsqueeze(A, [1, 2, 3])  # [C, 1, 1, 1]
+            out = F.conv2d(x, A, B, groups=self.num_features)
+
+            curr_U = U.numpy()
+            curr_V = V.numpy()
             state_dict = self.state_dict()
             momentum = self.momentum
             _mean = self._mean.numpy() * momentum + curr_U * (1. - momentum)
@@ -202,13 +226,27 @@ class MyBN(paddle.nn.Layer):
             state_dict['_mean'] = _mean.astype(np.float32)
             state_dict['_variance'] = _variance.astype(np.float32)
             self.set_state_dict(state_dict)
+            self.A = None
+            self.B = None
         else:
-            U = L.unsqueeze(self._mean, [0, 2, 3])  # [1, C, 1, 1]
-            V = L.unsqueeze(self._variance, [0, 2, 3])  # [1, C, 1, 1]
-            normX = (x - U) / L.sqrt(V + self.epsilon)  # [N, C, H, W]
-            scale = L.unsqueeze(self.weight, [0, 2, 3])
-            bias = L.unsqueeze(self.bias, [0, 2, 3])
-            out = normX * scale + bias
+            # 方案一：用乘法
+            # U = L.unsqueeze(self._mean, [0, 2, 3])  # [1, C, 1, 1]
+            # V = L.unsqueeze(self._variance, [0, 2, 3])  # [1, C, 1, 1]
+            # normX = (x - U) / L.sqrt(V + self.epsilon)  # [N, C, H, W]
+            # scale = L.unsqueeze(self.weight, [0, 2, 3])
+            # bias = L.unsqueeze(self.bias, [0, 2, 3])
+            # out = normX * scale + bias
+
+            # 方案二：用分组卷积代替乘法
+            # out = W*(x - U)/s + B     = (W/s) * x + B - (W/s)*U
+            if self.A is None:
+                std = L.sqrt(self._variance + self.epsilon)  # [C, ]
+                A = self.weight / std  # [C, ]
+                B = self.bias - self._mean * A  # [C, ]
+                A = L.unsqueeze(A, [1, 2, 3])  # [C, 1, 1, 1]
+                self.A = A
+                self.B = B
+            out = F.conv2d(x, self.A, self.B, groups=self.num_features)
         return out
 
 
@@ -505,8 +543,8 @@ class Conv2dUnit(paddle.nn.Layer):
         self.af = None
         self.cbn = None
         if bn:
-            self.bn = paddle.nn.BatchNorm2D(filters, weight_attr=pattr, bias_attr=battr)
-            # self.bn = MyBN(filters, weight_attr=pattr, bias_attr=battr)
+            # self.bn = paddle.nn.BatchNorm2D(filters, weight_attr=pattr, bias_attr=battr)
+            self.bn = MyBN(filters, weight_attr=pattr, bias_attr=battr)
         if gn:
             self.gn = paddle.nn.GroupNorm(num_groups=groups, num_channels=filters, weight_attr=pattr, bias_attr=battr)
         if af:
