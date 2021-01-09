@@ -311,8 +311,20 @@ class conv2d_grad(object):
         x_in = L.reshape(x_in, (N, in_C, out_H*out_W, kH, kW))       # [N, in_C, out_H*out_W, kH, kW]
         x_in = L.unsqueeze(x_in, 1)                                  # [N, 1, in_C, out_H*out_W, kH, kW]
         grad_r = L.reshape(grad, (N, out_C, 1, out_H*out_W, 1, 1))   # [N, out_C, 1, out_H*out_W, 1, 1]
-        dw = x_in * grad_r                                           # [N, out_C, in_C, out_H*out_W, kH, kW]
-        dL_dWeight = L.reduce_sum(dw, dim=[0, 3])                    # [out_C, in_C, kH, kW]
+
+        # 乘法
+        # dw = x_in * grad_r                                           # [N, out_C, in_C, out_H*out_W, kH, kW]
+        # dL_dWeight = L.reduce_sum(dw, dim=[0, 3])                    # [out_C, in_C, kH, kW]
+
+        # 根据https://github.com/miemie2013/Pure_Python_Deep_Learning  1x1conv.py里的口诀“13”，知道可以转换成1x1卷积。
+        # 把x_in看作是卷积输入图像，该图像的批大小为in_C, 该图像的通道数为N*out_H*out_W
+        # 把grad_r看作是卷积核，该卷积核的个数为out_C, 该卷积核的in_C为N*out_H*out_W
+        x_in = L.transpose(x_in, [2, 1, 0, 3, 4, 5])                 # [in_C,  1, N, out_H*out_W, kH, kW]
+        x_in = L.reshape(x_in, (in_C, N*out_H*out_W, kH, kW))        # [in_C, N*out_H*out_W, kH, kW]
+        grad_r = L.transpose(grad_r, [1, 2, 0, 3, 4, 5])             # [out_C, 1, N, out_H*out_W, 1, 1]
+        grad_r = L.reshape(grad_r, (out_C, N*out_H*out_W, 1, 1))     # [out_C, N*out_H*out_W, 1, 1]
+        dw = F.conv2d(x_in, grad_r, None)     # [in_C, out_C, kH, kW]
+        dL_dWeight = L.transpose(dw, [1, 0, 2, 3])             # [out_C, in_C, kH, kW]
         return dL_dWeight
 
 
