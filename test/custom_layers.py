@@ -277,6 +277,7 @@ class CBatchNorm2D(paddle.nn.Layer):
         self.pre_dmudw = []
         self.pre_dmeanx2dw = []
         self.pre_weight = []
+        self.special_kernel = None
 
         self.weight = fluid.layers.create_parameter(
             shape=[num_features, ],
@@ -326,6 +327,125 @@ class CBatchNorm2D(paddle.nn.Layer):
             self.buffer_num = int(self.max_buffer_num * min(self.iter_count / self.burnin, 1.0))
 
     def forward(self, input, weight):
+        # deal with wight and grad of self.pre_dxdw!
+        self._check_input_dim(input)
+        N, C, H, W = input.shape
+        NHW = N*H*W
+        y = input   # [N, C, H, W]
+
+        # burnin
+        if self.training and self.burnin > 0:
+            self.iter_count += 1
+            self._update_buffer_num()
+
+        if self.buffer_num > 0 and self.training and (not input.stop_gradient):  # some layers are frozen!
+            # cal current batch mu and sigma
+            cur_mu = L.reduce_mean(y, dim=[0, 2, 3], keep_dim=False)  # [C, ]
+            if self.special_kernel is None:  # 为了快速求(x - cur_mu)
+                special_kernel = np.ones((self.num_features, 1, 1, 1), np.float32)
+                self.special_kernel = paddle.to_tensor(special_kernel)
+                self.special_kernel.stop_gradient = True
+            cur_sigma2 = F.conv2d(y, self.special_kernel, -cur_mu, groups=self.num_features)  # 为了快速求(x - cur_mu)
+            cur_sigma2 = L.reduce_sum(L.square(cur_sigma2), dim=[0, 2, 3], keep_dim=False) / (NHW-1)  # [C, ]  作者原版实现中使用的是样本方差，所以分母-1
+
+            y2 = L.square(y)
+            cur_meanx2 = L.reduce_mean(y2, dim=[0, 2, 3], keep_dim=False)  # [C, ]
+            # cal dmu/dw dsigma2/dw
+            dmudw = paddle.grad(outputs=[cur_mu], inputs=[weight], create_graph=False, retain_graph=True)[0]
+            dmeanx2dw = paddle.grad(outputs=[cur_meanx2], inputs=[weight], create_graph=False, retain_graph=True)[0]
+
+            # update cur_mu and cur_sigma2 with pres
+            weight_data = weight.numpy()
+            weight_data = paddle.to_tensor(weight_data)
+            weight_data.stop_gradient = True
+            # 如果用L.stack()会报错，所以用L.concat()代替。
+            mu_all = [cur_mu, ] + [tmp_mu + L.reduce_sum(self.rho * tmp_d * (weight_data - tmp_w), dim=[1, 2, 3]) for
+                                   tmp_mu, tmp_d, tmp_w in zip(self.pre_mu, self.pre_dmudw, self.pre_weight)]
+            meanx2_all = [cur_meanx2, ] + [tmp_meanx2 + L.reduce_sum(self.rho * tmp_d * (weight_data - tmp_w), dim=[1, 2, 3]) for
+                                           tmp_meanx2, tmp_d, tmp_w in zip(self.pre_meanx2, self.pre_dmeanx2dw, self.pre_weight)]
+            mu_all = [L.unsqueeze(mu_, 0) for mu_ in mu_all]
+            meanx2_all = [L.unsqueeze(meanx2_, 0) for meanx2_ in meanx2_all]
+            mu_all = L.concat(mu_all, 0)
+            meanx2_all = L.concat(meanx2_all, 0)
+
+            sigma2_all = meanx2_all - L.square(mu_all)
+
+            # with considering count
+            re_mu_all = mu_all.clone()
+            re_meanx2_all = meanx2_all.clone()
+            mask1 = L.cast(sigma2_all >= 0., dtype="float32")
+            mask1.stop_gradient = True
+            re_mu_all *= mask1
+            re_meanx2_all *= mask1
+            count = L.reduce_sum(L.cast(sigma2_all >= 0., dtype="float32"), dim=[0, ])
+            mu = L.reduce_sum(re_mu_all, dim=[0, ]) / count
+            sigma2 = L.reduce_sum(re_meanx2_all, dim=[0, ]) / count - L.square(mu)
+
+
+            cur_mu_ = cur_mu.numpy()
+            cur_mu_ = paddle.to_tensor(cur_mu_)
+            cur_mu_.stop_gradient = True
+            self.pre_mu = [cur_mu_, ] + self.pre_mu[:(self.buffer_num - 1)]
+            cur_meanx2_ = cur_meanx2.numpy()
+            cur_meanx2_ = paddle.to_tensor(cur_meanx2_)
+            cur_meanx2_.stop_gradient = True
+            self.pre_meanx2 = [cur_meanx2_, ] + self.pre_meanx2[:(self.buffer_num - 1)]
+            dmudw_ = dmudw.numpy()
+            dmudw_ = paddle.to_tensor(dmudw_)
+            dmudw_.stop_gradient = True
+            self.pre_dmudw = [dmudw_, ] + self.pre_dmudw[:(self.buffer_num - 1)]
+            dmeanx2dw_ = dmeanx2dw.numpy()
+            dmeanx2dw_ = paddle.to_tensor(dmeanx2dw_)
+            dmeanx2dw_.stop_gradient = True
+            self.pre_dmeanx2dw = [dmeanx2dw_, ] + self.pre_dmeanx2dw[:(self.buffer_num - 1)]
+
+            tmp_weight = weight.numpy()
+            tmp_weight = paddle.to_tensor(tmp_weight)
+            tmp_weight.stop_gradient = True
+            self.pre_weight = [tmp_weight, ] + self.pre_weight[:(self.buffer_num - 1)]
+
+        else:
+            mu = L.reduce_mean(y, dim=[0, 2, 3], keep_dim=False)  # [C, ]
+            if self.special_kernel is None:  # 为了快速求(x - mu)
+                special_kernel = np.ones((self.num_features, 1, 1, 1), np.float32)
+                self.special_kernel = paddle.to_tensor(special_kernel)
+                self.special_kernel.stop_gradient = True
+            sigma2 = F.conv2d(y, self.special_kernel, -mu, groups=self.num_features)  # 为了快速求(x - mu)
+            sigma2 = L.reduce_sum(L.square(sigma2), dim=[0, 2, 3], keep_dim=False) / (NHW-1)  # [C, ]
+            cur_mu = mu
+            cur_sigma2 = sigma2
+
+        if not self.training or self.FROZEN:   # eval()状态
+            U = self._mean
+            # TODO: outside **0.5?
+            if self.out_p:
+                std = L.sqrt(self._variance + self.eps)
+            else:
+                std = L.sqrt(self._variance) + self.eps
+
+        else:   # train()状态
+            if self.track_running_stats is True:
+                state_dict = self.state_dict()
+                momentum = self.momentum
+                _mean = self._mean.numpy() * momentum + cur_mu.numpy() * (1. - momentum)
+                _variance = self._variance.numpy() * momentum + cur_sigma2.numpy() * (1. - momentum)
+                state_dict['_mean'] = _mean.astype(np.float32)
+                state_dict['_variance'] = _variance.astype(np.float32)
+                self.set_state_dict(state_dict)
+            U = mu
+            # TODO: outside **0.5?
+            if self.out_p:
+                std = L.sqrt(sigma2 + self.eps)
+            else:
+                std = L.sqrt(sigma2) + self.eps
+
+        A = self.weight / std  # [C, ]
+        B = self.bias - U * A  # [C, ]
+        A = L.unsqueeze(A, [1, 2, 3])  # [C, 1, 1, 1]
+        y = F.conv2d(y, A, B, groups=self.num_features)
+        return y
+
+    def forward2(self, input, weight):
         # deal with wight and grad of self.pre_dxdw!
         self._check_input_dim(input)
         y = L.transpose(input, [1, 0, 2, 3])   # [C, N, H, W]
