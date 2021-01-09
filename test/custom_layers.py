@@ -250,6 +250,73 @@ class MyBN(paddle.nn.Layer):
         return out
 
 
+class conv2d_grad(object):
+    def __init__(self,
+                 input_dim,
+                 filters,
+                 filter_size,
+                 stride=1,
+                 padding=0):
+        super(conv2d_grad, self).__init__()
+        self.input_dim = input_dim
+        self.filters = filters
+        self.filter_size = filter_size
+        self.stride = stride
+        self.padding = padding
+        self.dx_pos = None
+        self.special_mask = None
+        self.max_len = 0
+        self.special_inds = None
+        self.special_inds_dw = None
+
+    def set(self, x, y):
+        self.x = x
+        self.y = y
+
+    def get_grad_w(self, w, b, grad):
+        conv_in = self.x
+        conv_out = self.y
+        N, C, H, W = conv_in.shape
+        N, out_C, out_H, out_W = conv_out.shape
+        # w  [out_C, in_C, kH, kW]
+        out_C, in_C, kH, kW = w.shape
+        stride = self.stride
+        padding = self.padding
+        pad_H = H + padding * 2
+        pad_W = W + padding * 2
+
+        # loss对w的偏导数。
+        conv_in = paddle.to_tensor(conv_in)
+        pad_x = L.pad(conv_in, paddings=[0, 0, 0, 0, padding, padding, padding, padding], pad_value=0.0)  # [N, in_C, pad_H, pad_W]
+        pad_x = L.transpose(pad_x, [2, 3, 0, 1])  # [pad_H, pad_W, N, in_C]
+        if self.special_inds_dw is None:  # 只会做一次，即初始化。
+            self.special_inds_dw = []
+            # 卷积核滑动，只会在H和W两个方向上滑动
+            for i in range(out_H):  # i是纵坐标
+                for j in range(out_W):  # j是横坐标
+                    ori_x = j * stride  # 卷积核在pad_x中的横坐标，等差数列，公差是stride
+                    ori_y = i * stride  # 卷积核在pad_x中的纵坐标，等差数列，公差是stride
+                    for i2 in range(kH):  # i2是纵坐标
+                        for j2 in range(kW):  # j2是横坐标
+                            point_x = ori_x + j2
+                            point_y = ori_y + i2
+                            self.special_inds_dw.append([point_y, point_x])
+            # self.special_inds_dw.shape == [out_H*out_W*kH*kW, 2]
+        special_inds_dw = paddle.to_tensor(self.special_inds_dw)
+        special_inds_dw = L.cast(special_inds_dw, 'int32')
+        special_inds_dw.stop_gradient = True
+        x_in = L.gather_nd(pad_x, special_inds_dw)  # [out_H*out_W*kH*kW, N, in_C]
+        x_in = L.reshape(x_in, (out_H, out_W, kH, kW, N, in_C))
+        x_in = L.transpose(x_in, [4, 5, 0, 1, 2, 3])                 # [N, in_C, out_H, out_W, kH, kW]
+        x_in = L.reshape(x_in, (N, in_C, out_H*out_W, kH, kW))       # [N, in_C, out_H*out_W, kH, kW]
+        x_in = L.unsqueeze(x_in, 1)                                  # [N, 1, in_C, out_H*out_W, kH, kW]
+        grad_r = L.reshape(grad, (N, out_C, 1, out_H*out_W, 1, 1))   # [N, out_C, 1, out_H*out_W, 1, 1]
+        dw = x_in * grad_r                                           # [N, out_C, in_C, out_H*out_W, kH, kW]
+        dL_dWeight = L.reduce_sum(dw, dim=[0, 3])                    # [out_C, in_C, kH, kW]
+        return dL_dWeight
+
+
+
 class CBatchNorm2D(paddle.nn.Layer):
     def __init__(self, num_features, weight_attr, bias_attr, eps=1e-5, momentum=0.9, affine=True,
                  track_running_stats=True,
@@ -326,12 +393,13 @@ class CBatchNorm2D(paddle.nn.Layer):
         else:
             self.buffer_num = int(self.max_buffer_num * min(self.iter_count / self.burnin, 1.0))
 
-    def forward(self, input, weight):
+    def forward(self, input, conv, conv_g):
         # deal with wight and grad of self.pre_dxdw!
         self._check_input_dim(input)
         N, C, H, W = input.shape
         NHW = N*H*W
         y = input   # [N, C, H, W]
+        weight = conv.weight
 
         # burnin
         if self.training and self.burnin > 0:
@@ -350,9 +418,19 @@ class CBatchNorm2D(paddle.nn.Layer):
 
             y2 = L.square(y)
             cur_meanx2 = L.reduce_mean(y2, dim=[0, 2, 3], keep_dim=False)  # [C, ]
+
             # cal dmu/dw dsigma2/dw
-            dmudw = paddle.grad(outputs=[cur_mu], inputs=[weight], create_graph=False, retain_graph=True)[0]
-            dmeanx2dw = paddle.grad(outputs=[cur_meanx2], inputs=[weight], create_graph=False, retain_graph=True)[0]
+            # dmudw = paddle.grad(outputs=[cur_mu], inputs=[weight], create_graph=False, retain_graph=True)[0]
+            # dmeanx2dw = paddle.grad(outputs=[cur_meanx2], inputs=[weight], create_graph=False, retain_graph=True)[0]
+
+            # 自己的求法
+            dmudinput = np.zeros(input.shape, np.float32) + 1.0 / NHW
+            dmudinput = paddle.to_tensor(dmudinput)
+            dmeanx2dinput = input.numpy()
+            dmeanx2dinput = paddle.to_tensor(dmeanx2dinput)
+            dmeanx2dinput *= 2.0 / NHW
+            dmudw = conv_g.get_grad_w(conv.weight, conv.bias, dmudinput)
+            dmeanx2dw = conv_g.get_grad_w(conv.weight, conv.bias, dmeanx2dinput)
 
             # update cur_mu and cur_sigma2 with pres
             weight_data = weight.numpy()
@@ -681,6 +759,9 @@ class Conv2dUnit(paddle.nn.Layer):
                 default_initializer=Constant(0.))
         if cbn:
             self.cbn = CBatchNorm2D(filters, weight_attr=pattr, bias_attr=battr, buffer_num=3, burnin=8, out_p=True)
+            # ==================== grad ====================
+            self.temp_x = None
+            self.conv_g = conv2d_grad(input_dim, filters, filter_size, stride, self.padding)
 
         # act
         self.act = None
@@ -726,6 +807,8 @@ class Conv2dUnit(paddle.nn.Layer):
                                 bias_attr=False)
         else:
             conv_out = self.conv(x)
+            if self.cbn:
+                self.conv_g.set(x.numpy(), conv_out.numpy())
         if self.bn:
             norm_out = self.bn(conv_out)
         elif self.gn:
@@ -736,7 +819,7 @@ class Conv2dUnit(paddle.nn.Layer):
             if self.use_dcn:
                 norm_out = self.cbn(conv_out, self.dcn_param)
             else:
-                norm_out = self.cbn(conv_out, self.conv.weight)
+                norm_out = self.cbn(conv_out, self.conv, self.conv_g)
         else:
             norm_out = conv_out
         if self.act:
