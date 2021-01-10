@@ -60,7 +60,7 @@ class InstanceNorm(Layer):
         S = np.reshape(Scale, (1, -1, 1, 1))  # [1, C, 1, 1]
         B = np.reshape(Bias, (1, -1, 1, 1))   # [1, C, 1, 1]
 
-        # bn测试时前向传播的公式。用的是统计的均值和方差进行归一化。
+        # in测试时前向传播的公式。用的是当前图片的均值和方差进行归一化。
         y = (x - U) / np.sqrt(V + epsilon) * S + B
         return y
 
