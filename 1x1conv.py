@@ -276,6 +276,40 @@ print(d)
 
 
 
+print('================= 1D的in逐元素乘、1x1的1D卷积 ==================')
+N = 256
+C = 128
+H = 80
+
+
+x = paddle.randn((N, C, H))
+w = paddle.randn((N, C, 1))   # in归一化时会乘以标准差的倒数，这里的w相当于标准差的倒数。
+
+y = x * w   # [N, C, H]   也类似于yolov3中的置信位*分类概率。
+
+
+x_in = L.reshape(x, (1, N*C, H))   # in即把N和C结合成新的通道维
+w_r = L.reshape(w,  (N*C, 1, 1))
+y2 = F.conv1d(x_in, w_r, None, groups=N*C)   # [1, N*C, H]
+y2 = L.reshape(y2, (N, C, H))
+
+
+
+y = y.numpy()
+y2 = y2.numpy()
+d = np.sum((y - y2) ** 2)
+print(d)
+
+
+'''
+总结：
+1x1x1的3D卷积也有相似的结论。只不过口诀由
+13、03、02变成了（即"1"的个数+1）
+14、04、03
+'''
+
+
+
 
 
 
