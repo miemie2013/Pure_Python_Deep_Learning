@@ -55,7 +55,7 @@ class GroupNorm(Layer):
         g = self.g
 
         N, C, H, W = x.shape
-        x = np.reshape(x, (N, n, g, H, W))   # [N, n, g, H, W]   C=n*g
+        x = np.reshape(x, (N, n, g, H, W))   # [N, n, g, H, W]   C=n*g。n==C时为in，n==1时为ln。
 
         # 求均值。
         U = np.mean(x, axis=(2, 3, 4), keepdims=True)  # [N, n, 1, 1, 1]
