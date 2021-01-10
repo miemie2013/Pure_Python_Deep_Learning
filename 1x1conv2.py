@@ -27,8 +27,9 @@ x = paddle.randn((N, C, H, W))
 w = paddle.randn((1, C, 1, 1))   # bn归一化时会减去均值，这里的w相当于均值。
 
 y = x - w   # [N, C, H, W]   每个通道C独享一个均值。
+y3 = L.elementwise_sub(x, w, axis=-1)   # elementwise_sub() op指定了axis后可能比-号有更高的性能。
 
-# 指数可以让乘法变加法。
+# 指数可以让乘法变加法。虽然可以这样做但是不建议。
 x_in = L.exp(x)
 w_r = L.transpose(w, [1, 0, 2, 3])   # [C, 1, 1, 1]
 w_r = L.exp(-w_r)
