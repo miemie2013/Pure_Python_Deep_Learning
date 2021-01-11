@@ -131,8 +131,9 @@ if __name__ == '__main__':
 
         # 更新权重
         mseloss.backward()
-        optimizer.step()
-        optimizer.clear_grad()
+        if step % 1 == 0:
+            optimizer.step()
+            optimizer.clear_grad()
 
 
         print('train_forward:')
