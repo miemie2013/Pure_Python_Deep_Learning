@@ -40,11 +40,9 @@ paddle.disable_static()
 class PaddleNet(paddle.nn.Layer):
     def __init__(self, norm_type='bn', name=''):
         super(PaddleNet, self).__init__()
-        assert norm_type in ['bn', 'sync_bn', 'gn', 'affine_channel']
-        bn, gn, af = get_norm(norm_type)
         self.name = name
-        self.conv1 = Conv2dUnit(3, 8, 1, stride=1, bias_attr=False, bn=bn, gn=gn, af=af, freeze_norm=False, norm_decay=0.0, act='leaky', name='conv01')
-        self.conv2 = Conv2dUnit(8, 8, 3, stride=1, bias_attr=True, bn=0, gn=0, af=0, freeze_norm=False, norm_decay=0.0, act=None, name='conv02', lr=0.3, bias_lr=2.0)
+        self.conv1 = Conv2dUnit(3, 8, 1, stride=1, bias_attr=False, norm_type=norm_type, freeze_norm=False, norm_decay=0.0, act='leaky', name='conv01')
+        self.conv2 = Conv2dUnit(8, 8, 3, stride=1, bias_attr=True, norm_type=None, freeze_norm=False, norm_decay=0.0, act=None, name='conv02', lr=0.3, bias_lr=2.0)
 
         # freeze
         # self.conv1.freeze()
