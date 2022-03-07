@@ -21,6 +21,8 @@ import random
 import threading
 import numpy as np
 import os
+
+from paddle.fluid.initializer import Normal
 from paddle.fluid.param_attr import ParamAttr
 from paddle.fluid.regularizer import L2Decay
 
@@ -46,10 +48,10 @@ if __name__ == '__main__':
             inputs = P.data(name='input_1', shape=[-1, 3, 28, 28], append_batch_size=False, dtype='float32')
             conv01_out_tensor = fluid.layers.conv2d(input=inputs, num_filters=8, filter_size=1, stride=1, padding=0,
                                                     param_attr=ParamAttr(name="conv01_weights"),
-                                                    bias_attr=ParamAttr(name="conv01_bias"))
-            conv02_out_tensor = fluid.layers.conv2d(input=conv01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1,
+                                                    bias_attr=ParamAttr(name="conv01_bias", initializer=Normal()))
+            conv02_out_tensor = fluid.layers.conv2d(input=conv01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1, groups=2,
                                                     param_attr=ParamAttr(name="conv02_weights"),
-                                                    bias_attr=ParamAttr(name="conv02_bias"))
+                                                    bias_attr=ParamAttr(name="conv02_bias", initializer=Normal()))
 
 
             # 建立损失函数
@@ -70,10 +72,10 @@ if __name__ == '__main__':
             inputs = P.data(name='input_1', shape=[-1, 3, 28, 28], append_batch_size=False, dtype='float32')
             conv01_out_tensor = fluid.layers.conv2d(input=inputs, num_filters=8, filter_size=1, stride=1, padding=0,
                                                     param_attr=ParamAttr(name="conv01_weights"),
-                                                    bias_attr=ParamAttr(name="conv01_bias"))
-            conv02_out_tensor = fluid.layers.conv2d(input=conv01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1,
+                                                    bias_attr=ParamAttr(name="conv01_bias", initializer=Normal()))
+            conv02_out_tensor = fluid.layers.conv2d(input=conv01_out_tensor, num_filters=8, filter_size=3, stride=1, padding=1, groups=2,
                                                     param_attr=ParamAttr(name="conv02_weights"),
-                                                    bias_attr=ParamAttr(name="conv02_bias"))
+                                                    bias_attr=ParamAttr(name="conv02_bias", initializer=Normal()))
             eval_fetch_list = [conv01_out_tensor, conv02_out_tensor]
     eval_prog = eval_prog.clone(for_test=True)
     # 参数初始化
@@ -95,7 +97,7 @@ if __name__ == '__main__':
 
     #  纯python搭建的神经网络
     conv01 = Conv2D(3, num_filters=8, filter_size=1, stride=1, padding=0, use_bias=True, name='conv01')
-    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, use_bias=True, name='conv02')
+    conv02 = Conv2D(8, num_filters=8, filter_size=3, stride=1, padding=1, groups=2, use_bias=True, name='conv02')
     mse01 = MSELoss()
     optimizer2 = SGD(lr=lr)
     # 初始化自己网络的权重

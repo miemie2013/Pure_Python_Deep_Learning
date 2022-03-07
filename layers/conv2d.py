@@ -11,11 +11,14 @@ import numpy as np
 from layers.base_layer import Layer
 
 
-def F_conv2d(x, w, b, stride, padding):
+def F_conv2d(x, w, b, stride, padding, groups=1):
     # 卷积层推理时的前向传播。
     N, C, H, W = x.shape
-    out_C, in_C, kH, kW = w.shape
-    assert (C == in_C), "x.shape[1] must equal in_C."
+    g = groups
+    assert (C % groups == 0), "(C % groups == 0)"
+    out_C, c, kH, kW = w.shape    # c = C // groups
+    assert (out_C % groups == 0), "(out_C % groups == 0)"
+    oc = out_C // g
     out_W = (W+2*padding-(kW-1)) // stride
     out_H = (H+2*padding-(kH-1)) // stride
     out = np.zeros((N, out_C, out_H, out_W), np.float32)
@@ -29,11 +32,12 @@ def F_conv2d(x, w, b, stride, padding):
         for j in range(out_W):   # j是横坐标
             ori_x = j*stride   # 卷积核在pad_x中的横坐标，等差数列，公差是stride
             ori_y = i*stride   # 卷积核在pad_x中的纵坐标，等差数列，公差是stride
-            part_x = pad_x[:, :, ori_y:ori_y+kH, ori_x:ori_x+kW]   # 截取卷积核所处的位置的像素 [N, in_C, kH, kW]
-            exp_part_x = np.expand_dims(part_x, 1)   # 增加1维，[N, 1,     in_C, kH, kW]。
-            exp_w = np.expand_dims(w, 0)      # 卷积核也增加1维，[1, out_C, in_C, kH, kW]。
-            mul = exp_part_x * exp_w   # 卷积核和exp_part_x相乘，[N, out_C, in_C, kH, kW]。
-            mul = np.sum(mul, axis=(2, 3, 4))       # 后3维求和，[N, out_C]。
+            part_x = pad_x[:, :, ori_y:ori_y+kH, ori_x:ori_x+kW]    # 截取卷积核所处的位置的像素块 [N, C, kH, kW]
+            part_x = np.reshape(part_x, (N, g, 1, c, kH, kW))  # 像素块通道分g组    ， [N, g, 1, c, kH, kW]。
+            exp_w = np.reshape(w, (1, g, oc, c, kH, kW))       # 卷积核个数out_C分g组，[1, g, oc, c, kH, kW]。
+            mul = part_x * exp_w                               # 像素块和卷积核相乘，   [N, g, oc, c, kH, kW]。
+            mul = np.sum(mul, axis=(3, 4, 5))       # 后3维求和，[N, g, oc]。
+            mul = np.reshape(mul, (N, out_C))       # [N, out_C]。
             if b is not None:
                 mul += b    # 加上偏移，[N, out_C]。
             # 将得到的新像素写进out的对应位置
@@ -48,6 +52,7 @@ class Conv2D(Layer):
                  filter_size,
                  stride=1,
                  padding=0,
+                 groups=1,
                  use_bias=False,
                  w_decay_type=None,
                  w_decay=0.,
@@ -57,13 +62,16 @@ class Conv2D(Layer):
                  b_lr=1.,
                  name=''):
         super(Conv2D, self).__init__()
+        assert (in_C % groups == 0), "(C % groups == 0)"
 
         self.in_C = in_C
+        self.c = in_C // groups
         self.out_C = num_filters
         self.kH = filter_size
         self.kW = filter_size
         self.stride = stride
         self.padding = padding
+        self.groups = groups
         self.num_filters = num_filters
         assert w_decay_type in ['L1Decay', 'L2Decay', None]
         assert b_decay_type in ['L1Decay', 'L2Decay', None]
@@ -75,7 +83,7 @@ class Conv2D(Layer):
         self.b_lr = b_lr
         self.name = name
 
-        self.w = np.zeros((self.out_C, self.in_C, self.kH, self.kW), np.float32)
+        self.w = np.zeros((self.out_C, self.c, self.kH, self.kW), np.float32)
         self.b = None
         if use_bias:
             self.b = np.zeros((self.out_C, ), np.float32)
@@ -90,40 +98,13 @@ class Conv2D(Layer):
 
     def test_forward(self, x):
         # 卷积层推理时的前向传播。
-        N, C, H, W = x.shape
-        out_C, in_C, kH, kW = self.w.shape
         w = self.w
         b = self.b
+        groups = self.groups
         stride = self.stride
         padding = self.padding
-        assert (C == in_C), "x.shape[1] must equal in_C."
-        out_W = (W+2*padding-(kW-1)) // stride
-        out_H = (H+2*padding-(kH-1)) // stride
 
-        # 针对4x4卷积核
-        if kW == 4 and stride == 2 and padding == 1:
-            out_H += 1
-            out_W += 1
-        out = np.zeros((N, out_C, out_H, out_W), np.float32)
-
-        # 1.先对图片x填充得到填充后的图片pad_x
-        pad_x = np.zeros((N, C, H + padding*2, W + padding*2), np.float32)
-        pad_x[:, :, padding:padding + H, padding:padding + W] = x
-
-        # 2.卷积核滑动，只会在H和W两个方向上滑动
-        for i in range(out_H):   # i是纵坐标
-            for j in range(out_W):   # j是横坐标
-                ori_x = j*stride   # 卷积核在pad_x中的横坐标，等差数列，公差是stride
-                ori_y = i*stride   # 卷积核在pad_x中的纵坐标，等差数列，公差是stride
-                part_x = pad_x[:, :, ori_y:ori_y+kH, ori_x:ori_x+kW]   # 截取卷积核所处的位置的像素 [N, in_C, kH, kW]
-                exp_part_x = np.expand_dims(part_x, 1)   # 增加1维，[N, 1,     in_C, kH, kW]。
-                exp_w = np.expand_dims(w, 0)      # 卷积核也增加1维，[1, out_C, in_C, kH, kW]。
-                mul = exp_part_x * exp_w   # 卷积核和exp_part_x相乘，[N, out_C, in_C, kH, kW]。
-                mul = np.sum(mul, axis=(2, 3, 4))       # 后3维求和，[N, out_C]。
-                if b is not None:
-                    mul += b    # 加上偏移，[N, out_C]。
-                # 将得到的新像素写进out的对应位置
-                out[:, :, i, j] = mul
+        out = F_conv2d(x=x, w=w, b=b, stride=stride, padding=padding, groups=groups)
         return out
 
     def train_forward(self, x):

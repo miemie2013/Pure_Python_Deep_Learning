@@ -1,0 +1,22 @@
+
+
+
+
+先求本层每一个输出元素对本层输入张量的偏导数dy_ij / dX，
+然后dloss / dX = 西格玛（求和符号） dloss / dy_ij * dy_ij / dX
+
+
+分组卷积的梯度：
+如图，假设输入X.shape = (1, 12, 4, 4)，卷积核权重W.shape = (6, 4, 3, 3)，stride=1，padding=0，groups=3
+则输出Y.shape = (1, 6, 2, 2)，
+则
+
+
+
+
+
+
+
+
+
+
