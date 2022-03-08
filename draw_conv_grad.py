@@ -14,7 +14,7 @@ out_H = 2
 out_W = 2
 dY_dX = np.zeros((1, C, H, W))
 
-image = np.zeros((800, 300, 3), dtype=np.uint8) + 240
+image = np.zeros((720, 300, 3), dtype=np.uint8) + 240
 
 left_up = [120, 20]
 w = 150
