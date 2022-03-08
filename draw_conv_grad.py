@@ -4,14 +4,17 @@ import cv2
 import numpy as np
 
 
-C = 12
-groups = 3
+C = 6
+groups = 2
 c = C // groups
 H = 4
 W = 4
+out_C = 4
+out_H = 2
+out_W = 2
 dY_dX = np.zeros((1, C, H, W))
 
-image = np.zeros((1500, 300, 3), dtype=np.uint8) + 240
+image = np.zeros((800, 300, 3), dtype=np.uint8) + 240
 
 left_up = [120, 20]
 w = 150
@@ -97,9 +100,9 @@ image2 = np.copy(image)
 
 # 填入梯度的值
 
-for ii in range(6):
-    for jj in range(2):
-        for kk in range(2):
+for ii in range(out_C):
+    for jj in range(out_H):
+        for kk in range(out_W):
             image = np.copy(image2)
             grad = 'W[%d]'%ii
             target_group_id = ii // 2
