@@ -236,6 +236,45 @@ print(d)
 '''
 
 
+print('================= 1x1分组卷积，写于复现stylegan2ada ==================')
+N = 2
+in_C = 8
+g = 2
+c = in_C//g
+out_C = 16
+oc = out_C//g
+H = 512
+W = 512
+
+
+x = paddle.randn((N, in_C, H, W))
+w = paddle.randn((out_C, c, 1, 1))   # gn归一化时会乘以标准差的倒数，这里的w相当于标准差的倒数。
+
+y = F.conv2d(x, w, None, groups=g)   # [N, out_C, H, W]
+
+x_in = L.reshape(x, (N, g, 1, c, H, W))
+w_r = L.reshape(w, (1, g, oc, c, 1, 1))
+y2 = x_in * w_r   # [N, g, oc, c, H, W]
+y2 = L.reduce_sum(y2, dim=[3, ])   # [N, g, oc, H, W]
+y2 = L.reshape(y2, (N, g*oc, H, W))  # [N, out_C, H, W]
+
+y = y.numpy()
+y2 = y2.numpy()
+d = np.sum((y - y2) ** 2)
+print(d)
+
+
+'''
+总结：
+因此，两个形如
+(A, g, 1, c, D, E)
+(1, g, B, c, 1, 1)
+的张量逐元素相乘，实际上可以转换成1x1分组卷积来进行快速计算（以及更节省显存）。组数为g。
+可以记为，有2维的长度相同，且"13"（即"1"的数量分别为1、3）。
+
+'''
+
+
 
 print('================= 逐元素乘、1x1x1的3D卷积 ==================')
 N = 2
